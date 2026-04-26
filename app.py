@@ -22,8 +22,21 @@ SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "portfolio.csv")
 RESULTS_FILE = os.path.join(BASE_DIR, "market_scan_results.csv")
 PORTFOLIO_RESULTS_FILE = os.path.join(BASE_DIR, "portfolio_scan_results.csv")
+REPORT_CACHE_FILE = os.path.join(BASE_DIR, "reports_cache.json")
 
 import json
+
+def load_report_cache():
+    if os.path.exists(REPORT_CACHE_FILE):
+        try:
+            with open(REPORT_CACHE_FILE, "r") as f:
+                return json.load(f)
+        except: pass
+    return {}
+
+def save_report_cache(cache):
+    with open(REPORT_CACHE_FILE, "w") as f:
+        json.dump(cache, f, ensure_ascii=False)
 
 def load_settings():
     if os.path.exists(SETTINGS_FILE):
@@ -250,43 +263,49 @@ with tab2:
                 # 自動スキャンの上位5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
                 report_strategy = AIStrategy(api_key=api_key)
+                report_cache = load_report_cache()
                 
                 for _, row in df_auto.head(5).iterrows():
-                    with st.expander(f"💰 {row['Ticker']} の投資戦略レポート (自動診断)"):
-                        with st.spinner("Generating strategy..."):
-                            try:
-                                # ニュースを取得してセンチメントを計算
-                                stock = yf.Ticker(row['Ticker'])
-                                news = stock.news
-                                s_score = 0
-                                if news:
-                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
-                                    try:
-                                        import json
-                                        raw_s = report_strategy.get_sentiment(row['Ticker'], news_text)
-                                        clean_json = raw_s.strip()
-                                        if "```json" in clean_json:
-                                            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-                                        res = json.loads(clean_json)
-                                        s_score = res.get("score", 0)
-                                    except: pass
-                                
-                                # 予算を銘柄の通貨に合わせて換算する
-                                native_currency = "JPY" if row['Currency']=='JPY' else "USD"
-                                effective_budget = total_budget
-                                if display_currency == "JPY" and native_currency == "USD":
-                                    effective_budget = total_budget / usdjpy
-                                elif display_currency == "USD" and native_currency == "JPY":
-                                    effective_budget = total_budget * usdjpy
-                                
-                                c_symbol = "¥" if native_currency == "JPY" else "$"
-                                advice = report_strategy.get_investment_advice(
-                                    row['Ticker'], row['Price'], row['AI Prediction'], 
-                                    s_score, effective_budget, c_symbol
-                                )
-                                st.markdown(advice)
-                            except Exception as e:
-                                st.warning(f"レポート生成に失敗しました: {e}")
+                    ticker = row['Ticker']
+                    cache_key = f"{ticker}_{row['Price']:.1f}"
+                    
+                    with st.expander(f"💰 {ticker} の投資戦略レポート (自動診断)"):
+                        if cache_key in report_cache:
+                            st.markdown(report_cache[cache_key])
+                        else:
+                            with st.spinner(f"Generating strategy for {ticker}..."):
+                                try:
+                                    # ニュースを取得してセンチメントを計算
+                                    stock = yf.Ticker(ticker)
+                                    news = stock.news
+                                    s_score = 0
+                                    if news:
+                                        news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                        try:
+                                            import json
+                                            raw_s = report_strategy.get_sentiment(ticker, news_text)
+                                            clean_json = raw_s.strip()
+                                            if "```json" in clean_json:
+                                                clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                                            res = json.loads(clean_json)
+                                            s_score = res.get("score", 0)
+                                        except: pass
+                                    
+                                    native_currency = "JPY" if row['Currency']=='JPY' else "USD"
+                                    effective_budget = total_budget
+                                    if display_currency == "JPY" and native_currency == "USD": effective_budget = total_budget / usdjpy
+                                    elif display_currency == "USD" and native_currency == "JPY": effective_budget = total_budget * usdjpy
+                                    
+                                    c_symbol = "¥" if native_currency == "JPY" else "$"
+                                    advice = report_strategy.get_investment_advice(ticker, row['Price'], row['AI Prediction'], s_score, effective_budget, c_symbol)
+                                    
+                                    # キャッシュに保存
+                                    report_cache[cache_key] = advice
+                                    save_report_cache(report_cache)
+                                    
+                                    st.markdown(advice)
+                                except Exception as e:
+                                    st.warning(f"レポート生成に失敗しました: {e}")
 
                 st.info("💡 毎日深夜に自動実行されるAIスキャンの結果です。")
             except Exception as e:
@@ -411,43 +430,50 @@ with tab2:
             # 上位5件に対して詳細な投資戦略を生成
             st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
             report_strategy = AIStrategy(api_key=api_key)
+            report_cache = load_report_cache()
             
             for _, row in df_res.head(5).iterrows():
-                with st.expander(f"💰 {row['Ticker']} の投資戦略レポート"):
-                    with st.spinner("Generating strategy..."):
-                        try:
-                            # ニュースを取得してセンチメントを計算
-                            stock = yf.Ticker(row['Ticker'])
-                            news = stock.news
-                            s_score = 0
-                            if news:
-                                news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
-                                try:
-                                    import json
-                                    raw_s = report_strategy.get_sentiment(row['Ticker'], news_text)
-                                    clean_json = raw_s.strip()
-                                    if "```json" in clean_json:
-                                        clean_json = clean_json.split("```json")[1].split("```")[0].strip()
-                                    res = json.loads(clean_json)
-                                    s_score = res.get("score", 0)
-                                except: pass
-                            
-                            # 予算を銘柄の通貨に合わせて換算する
-                            native_currency = "JPY" if row['Currency']=='JPY' else "USD"
-                            effective_budget = total_budget
-                            if display_currency == "JPY" and native_currency == "USD":
-                                effective_budget = total_budget / usdjpy
-                            elif display_currency == "USD" and native_currency == "JPY":
-                                effective_budget = total_budget * usdjpy
-                            
-                            c_symbol = "¥" if native_currency == "JPY" else "$"
-                            advice = report_strategy.get_investment_advice(
-                                row['Ticker'], row['Price'], row['AI Prediction'], 
-                                s_score, effective_budget, c_symbol
-                            )
-                            st.markdown(advice)
-                        except Exception as e:
-                            st.warning(f"レポート生成に失敗しました: {e}")
+                ticker = row['Ticker']
+                cache_key = f"{ticker}_{row['Price']:.1f}"
+                
+                with st.expander(f"💰 {ticker} の投資戦略レポート"):
+                    if cache_key in report_cache:
+                        st.markdown(report_cache[cache_key])
+                    else:
+                        with st.spinner(f"Generating strategy for {ticker}..."):
+                            try:
+                                # ニュースを取得してセンチメントを計算
+                                stock = yf.Ticker(ticker)
+                                news = stock.news
+                                s_score = 0
+                                if news:
+                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                    try:
+                                        import json
+                                        raw_s = report_strategy.get_sentiment(ticker, news_text)
+                                        clean_json = raw_s.strip()
+                                        if "```json" in clean_json:
+                                            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                                        res = json.loads(clean_json)
+                                        s_score = res.get("score", 0)
+                                    except: pass
+                                
+                                # 予算を銘柄の通貨に合わせて換算する
+                                native_currency = "JPY" if row['Currency']=='JPY' else "USD"
+                                effective_budget = total_budget
+                                if display_currency == "JPY" and native_currency == "USD": effective_budget = total_budget / usdjpy
+                                elif display_currency == "USD" and native_currency == "JPY": effective_budget = total_budget * usdjpy
+                                
+                                c_symbol = "¥" if native_currency == "JPY" else "$"
+                                advice = report_strategy.get_investment_advice(ticker, row['Price'], row['AI Prediction'], s_score, effective_budget, c_symbol)
+                                
+                                # キャッシュに保存
+                                report_cache[cache_key] = advice
+                                save_report_cache(report_cache)
+                                
+                                st.markdown(advice)
+                            except Exception as e:
+                                st.warning(f"レポート生成に失敗しました: {e}")
         except Exception as e:
             st.error(f"分析結果の表示中にエラーが発生しました: {e}")
     else:
@@ -551,6 +577,50 @@ with tab3:
                 
                 # 表示の更新
                 table_placeholder.table(pd.DataFrame(portfolio_results))
+                
+                # --- 詳細AIレポート (キャッシュ機能付き) ---
+                with st.expander(f"📖 {row['Ticker']} の詳細AIレポート"):
+                    cache_key = f"{row['Ticker']}_{current_price:.1f}"
+                    report_cache = load_report_cache()
+                    
+                    if cache_key in report_cache:
+                        st.markdown(report_cache[cache_key])
+                    else:
+                        with st.spinner(f"AI Analyzing {row['Ticker']}..."):
+                            try:
+                                # ニュース取得とセンチメント
+                                stock = yf.Ticker(row['Ticker'])
+                                news = stock.news
+                                s_score = 0
+                                if news:
+                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                    try:
+                                        import json
+                                        raw_s = strategy.get_sentiment(row['Ticker'], news_text)
+                                        clean_json = raw_s.strip()
+                                        if "```json" in clean_json:
+                                            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                                        res = json.loads(clean_json)
+                                        s_score = res.get("score", 0)
+                                    except: pass
+                                
+                                # 予算換算
+                                eff_budget = total_budget
+                                if display_currency == "JPY" and native_currency == "USD": eff_budget = total_budget / usdjpy
+                                elif display_currency == "USD" and native_currency == "JPY": eff_budget = total_budget * usdjpy
+                                
+                                c_symbol = "¥" if native_currency == "JPY" else "$"
+                                detailed_advice = strategy.get_investment_advice(
+                                    row['Ticker'], current_price, prediction * 252, 
+                                    s_score, eff_budget, c_symbol
+                                )
+                                
+                                # キャッシュ保存
+                                report_cache[cache_key] = detailed_advice
+                                save_report_cache(report_cache)
+                                st.markdown(detailed_advice)
+                            except Exception as e:
+                                st.warning(f"レポート生成に失敗しました: {e}")
                 
                 # 詳細解析ボタン
                 if st.button(f"🔍 {row['Ticker']} をRL詳細解析", key=f"rl_btn_{index}"):
