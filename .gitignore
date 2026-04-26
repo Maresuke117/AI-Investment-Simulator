@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+.streamlit/
+portfolio.csv
+settings.json
+rl_models/
+*.log
+.DS_Store

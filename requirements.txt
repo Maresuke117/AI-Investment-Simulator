@@ -1,0 +1,14 @@
+streamlit
+pandas
+yfinance
+xgboost
+google-generativeai
+gymnasium
+stable-baselines3
+shimmy
+requests
+python-dotenv
+scikit-learn
+matplotlib
+ta
+numpy
