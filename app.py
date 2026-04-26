@@ -246,6 +246,48 @@ with tab2:
                 df_auto['Price_Display'] = df_auto.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
                 
                 st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(20).style.format({"AI Prediction": "{:.2%}"}))
+                
+                # 自動スキャンの上位5件に対して詳細な投資戦略を生成
+                st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
+                report_strategy = AIStrategy(api_key=api_key)
+                
+                for _, row in df_auto.head(5).iterrows():
+                    with st.expander(f"💰 {row['Ticker']} の投資戦略レポート (自動診断)"):
+                        with st.spinner("Generating strategy..."):
+                            try:
+                                # ニュースを取得してセンチメントを計算
+                                stock = yf.Ticker(row['Ticker'])
+                                news = stock.news
+                                s_score = 0
+                                if news:
+                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                    try:
+                                        import json
+                                        raw_s = report_strategy.get_sentiment(row['Ticker'], news_text)
+                                        clean_json = raw_s.strip()
+                                        if "```json" in clean_json:
+                                            clean_json = clean_json.split("```json")[1].split("```")[0].strip()
+                                        res = json.loads(clean_json)
+                                        s_score = res.get("score", 0)
+                                    except: pass
+                                
+                                # 予算を銘柄の通貨に合わせて換算する
+                                native_currency = "JPY" if row['Currency']=='JPY' else "USD"
+                                effective_budget = total_budget
+                                if display_currency == "JPY" and native_currency == "USD":
+                                    effective_budget = total_budget / usdjpy
+                                elif display_currency == "USD" and native_currency == "JPY":
+                                    effective_budget = total_budget * usdjpy
+                                
+                                c_symbol = "¥" if native_currency == "JPY" else "$"
+                                advice = report_strategy.get_investment_advice(
+                                    row['Ticker'], row['Price'], row['AI Prediction'], 
+                                    s_score, effective_budget, c_symbol
+                                )
+                                st.markdown(advice)
+                            except Exception as e:
+                                st.warning(f"レポート生成に失敗しました: {e}")
+
                 st.info("💡 毎日深夜に自動実行されるAIスキャンの結果です。")
             except Exception as e:
                 st.error(f"スキャン結果の読み込みに失敗しました: {e}")
@@ -366,11 +408,11 @@ with tab2:
 
             st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(50).style.format({"AI Prediction": "{:.2%}"}))
             
-            # 上位3件に対して詳細な投資戦略を生成
-            st.subheader("💡 AI Recommended Investment Strategy (Top 3)")
+            # 上位5件に対して詳細な投資戦略を生成
+            st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
             report_strategy = AIStrategy(api_key=api_key)
             
-            for _, row in df_res.head(3).iterrows():
+            for _, row in df_res.head(5).iterrows():
                 with st.expander(f"💰 {row['Ticker']} の投資戦略レポート"):
                     with st.spinner("Generating strategy..."):
                         try:
