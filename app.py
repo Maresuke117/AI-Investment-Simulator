@@ -6,6 +6,7 @@ from data_loader import get_stock_data, search_ticker
 from strategy import AIStrategy, prepare_features
 from dotenv import load_dotenv
 import os
+import time
 
 # .envファイルを読み込む
 load_dotenv()
