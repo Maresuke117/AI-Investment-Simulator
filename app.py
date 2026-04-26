@@ -322,6 +322,9 @@ with tab2:
                 
             # 上位3件に対して詳細な投資戦略を生成
             st.subheader("💡 AI Recommended Investment Strategy (Top 3)")
+            # 解析用のエンジンを定義
+            report_strategy = AIStrategy(api_key=api_key)
+            
             for _, row in df_res.head(3).iterrows():
                 with st.expander(f"💰 {row['Ticker']} の投資戦略レポート"):
                     with st.spinner("Generating strategy..."):
@@ -334,7 +337,7 @@ with tab2:
                                 news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
                                 try:
                                     import json
-                                    raw_s = strategy.get_sentiment(row['Ticker'], news_text)
+                                    raw_s = report_strategy.get_sentiment(row['Ticker'], news_text)
                                     clean_json = raw_s.strip()
                                     if "```json" in clean_json:
                                         clean_json = clean_json.split("```json")[1].split("```")[0].strip()
@@ -346,7 +349,7 @@ with tab2:
                             c_symbol = "¥" if row['Currency']=='JPY' else "$"
                             price_val = row['Price']
                             
-                            advice = strategy.get_investment_advice(
+                            advice = report_strategy.get_investment_advice(
                                 row['Ticker'], price_val, row['AI Prediction'], 
                                 s_score, total_budget, c_symbol
                             )
