@@ -97,7 +97,11 @@ def run_mass_scan():
         print("❌ No results found.")
 
 def send_discord_summary(top_df, p_df):
-    if not DISCORD_WEBHOOK_URL: return
+    if not DISCORD_WEBHOOK_URL:
+        print("⚠️ DISCORD_WEBHOOK_URL is not set. Skipping notification.")
+        return
+    
+    print(f"📡 Sending summary to Discord... (Top {len(top_df)} stocks, {len(p_df)} portfolio stocks)")
     
     msg = "⭐ **【AI自動巡回】おはようございます！本日の投資レポートです** ⭐\n\n"
     
@@ -113,7 +117,15 @@ def send_discord_summary(top_df, p_df):
     
     msg += "\n詳細な分析はアプリでチェックしてください！\n"
     msg += "🔗 https://ai-investment-simulator.streamlit.app/"
-    requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
+    
+    try:
+        response = requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
+        if response.status_code == 204 or response.status_code == 200:
+            print("✅ Discord notification sent successfully!")
+        else:
+            print(f"❌ Failed to send Discord notification. Status Code: {response.status_code}, Response: {response.text}")
+    except Exception as e:
+        print(f"❌ Error sending Discord notification: {e}")
 
 if __name__ == "__main__":
     run_mass_scan()
