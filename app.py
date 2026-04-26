@@ -233,7 +233,7 @@ with tab2:
     st.subheader("🚀 High-Speed Mass Screener")
     st.markdown("数百銘柄から有望株を高速に抽出します。")
     
-    # 拡張プリセット
+    # プリセット銘柄の定義
     PRESETS = {
         "カスタム入力": "",
         "🇺🇸 S&P 100 (米国時価総額上位)": "AAPL,MSFT,AMZN,NVDA,GOOGL,META,GOOG,BRK-B,TSLA,UNH,LLY,AVGO,XOM,JPM,V,MA,JNJ,PG,COST,HD,ABBV,ADBE,CRM,WMT,BAC,CVX,ACN,PEP,MRK,KO,LIN,AMD,TMO,CSCO,ORCL,MCD,INTC,ABT,GE,CAT,VZ,DIS,DHR,INTU,CMCSA,PM,PFE,IBM,AMAT,QCOM,UNP,ISRG,LOW,HON,TXN,SPGI,AMGN,AXP,COP,MS,RTX,NEE,GS,ELV,SCHW,SYK,LMT,TJX,BLK,DE,ETN,UPS,PGR,C,REGN,SBUX,MDLZ,VRTX,MMC,CB,BSX,PLD,ADI,PANW,BA,CI,GILD,FI,SNPS,BMY,MU,HCA,CDNS,T,CRWD,LRCX,MAR,SHW,ITW",
@@ -241,10 +241,26 @@ with tab2:
         "💻 半導体・AI関連 (日米)": "NVDA,ASML,TSM,AMD,ARM,8035.T,6857.T,6146.T,PLTR,SMCI,AVGO,6723.T"
     }
     
-    preset_choice = st.selectbox("カテゴリーから一括選択", options=list(PRESETS.keys()), key="preset_select_mass")
+    # 選択が変更された時にテキストエリアを更新する関数
+    def update_presets():
+        choice = st.session_state.preset_select_mass
+        if choice in PRESETS and PRESETS[choice]:
+            st.session_state.ticker_input_mass = PRESETS[choice]
+
+    # プルダウン（変更時にupdate_presetsを呼ぶ）
+    preset_choice = st.selectbox(
+        "カテゴリーから一括選択", 
+        options=list(PRESETS.keys()), 
+        key="preset_select_mass",
+        on_change=update_presets
+    )
+    
+    # 初期値の設定
+    if "ticker_input_mass" not in st.session_state:
+        st.session_state.ticker_input_mass = "AAPL,MSFT,NVDA"
+
     ticker_list_raw = st.text_area(
         "対象ティッカー", 
-        value=PRESETS[preset_choice] if PRESETS[preset_choice] else "AAPL,MSFT,NVDA...",
         key="ticker_input_mass"
     )
     
