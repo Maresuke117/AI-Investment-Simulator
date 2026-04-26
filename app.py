@@ -20,6 +20,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SETTINGS_FILE = os.path.join(BASE_DIR, "settings.json")
 PORTFOLIO_FILE = os.path.join(BASE_DIR, "portfolio.csv")
 RESULTS_FILE = os.path.join(BASE_DIR, "market_scan_results.csv")
+PORTFOLIO_RESULTS_FILE = os.path.join(BASE_DIR, "portfolio_scan_results.csv")
 
 import json
 
@@ -414,6 +415,24 @@ with tab3:
     st.markdown("あなたの保有銘柄を登録し、AIからの売買アドバイスを確認します。")
     
     portfolio_df = load_portfolio()
+    
+    # 自動診断結果の表示
+    if os.path.exists(PORTFOLIO_RESULTS_FILE):
+        with st.expander("📅 毎朝のAI自動診断レポート", expanded=True):
+            try:
+                df_p_auto = pd.read_csv(PORTFOLIO_RESULTS_FILE)
+                st.write(f"最終診断: {time.ctime(os.path.getmtime(PORTFOLIO_RESULTS_FILE))}")
+                
+                def get_status_label(pred):
+                    if pred > 0.2: return "🔥 強気"
+                    if pred > 0: return "✅ 堅調"
+                    return "⚠️ 注意"
+                
+                df_p_auto['Status'] = df_p_auto['AI Prediction'].apply(get_status_label)
+                st.table(df_p_auto[["Name", "Ticker", "Status", "AI Prediction"]].style.format({"AI Prediction": "{:.2%}"}))
+                st.info("💡 毎朝7時に実行される自動診断の結果です。")
+            except Exception as e:
+                st.error(f"診断結果の読み込みに失敗しました: {e}")
     
     # 新規登録
     with st.expander("➕ 新しい持ち株を登録する"):
