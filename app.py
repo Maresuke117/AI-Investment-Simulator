@@ -230,8 +230,26 @@ with tab1:
             st.error(f"Error: {e}")
 
 with tab2:
-    st.subheader("🚀 High-Speed Mass Screener")
-    st.markdown("数百銘柄から有望株を高速に抽出します。")
+    st.subheader("🚀 Global Market Mass Screener")
+    
+    # 自動スキャン結果の表示セクション
+    if os.path.exists(RESULTS_FILE):
+        with st.expander("📅 最新の自動スキャン結果を表示 (AI推薦銘柄ランキング)", expanded=True):
+            try:
+                df_auto = pd.read_csv(RESULTS_FILE)
+                st.write(f"最終更新: {time.ctime(os.path.getmtime(RESULTS_FILE))}")
+                
+                # 通貨記号の付与
+                df_auto['Price_Display'] = df_auto.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
+                
+                st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(20).style.format({"AI Prediction": "{:.2%}"}))
+                st.info("💡 毎日深夜に自動実行されるAIスキャンの結果です。")
+            except Exception as e:
+                st.error(f"スキャン結果の読み込みに失敗しました: {e}")
+    
+    st.markdown("---")
+    st.subheader("🛠 カスタム・一括スキャナー")
+    st.markdown("特定の銘柄群を今すぐ手動でスキャンしたい場合に使用してください。")
     
     # プリセット銘柄の定義
     PRESETS = {
@@ -264,9 +282,19 @@ with tab2:
         key="ticker_input_mass"
     )
     
-    use_parallel = st.checkbox("高速並列スキャンを使用 (推奨)", value=True)
+    CUSTOM_RESULTS_FILE = "custom_scan_results.csv"
     
-    if st.button("🚀 大量スキャニング開始"):
+    use_parallel = st.checkbox("高速並列スキャンを使用 (推奨)", value=True, key="use_parallel_mass")
+    
+    col_btn1, col_btn2 = st.columns([1, 4])
+    start_btn = col_btn1.button("🚀 大量スキャニング開始", key="btn_screen_mass")
+    
+    if os.path.exists(CUSTOM_RESULTS_FILE):
+        if col_btn2.button("🗑️ 結果をリセット", key="btn_reset_mass"):
+            os.remove(CUSTOM_RESULTS_FILE)
+            st.rerun()
+
+    if start_btn:
         tickers = [t.strip() for t in ticker_list_raw.split(",") if t.strip()]
         results = []
         progress_bar = st.progress(0)
@@ -276,16 +304,12 @@ with tab2:
         
         def process_ticker(t_input):
             try:
-                # 検索と整形
                 target_t = t_input
                 if target_t.isdigit() and len(target_t) == 4: target_t += ".T"
-                
-                # 1段階目: データ取得
                 data, currency = get_stock_data(target_t, period=period)
                 data = prepare_features(data)
                 if len(data) < 50: return None
                 
-                # 2段階目: AI予測
                 strategy = AIStrategy(api_key=api_key)
                 strategy.train(data)
                 signals = strategy.predict_signals(data)
@@ -293,7 +317,6 @@ with tab2:
                 avg_pred = signals['Prediction'].tail(5).mean()
                 annualized_pred = avg_pred * 252
                 
-                # 企業名の取得（高速化のためキャッシュを活用）
                 try:
                     name = yf.Ticker(target_t).info.get('shortName', target_t)
                 except:
@@ -310,50 +333,38 @@ with tab2:
             except:
                 return None
 
-        # 並列実行
         if use_parallel:
-            max_workers = 10
-            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            with ThreadPoolExecutor(max_workers=10) as executor:
                 future_to_ticker = {executor.submit(process_ticker, t): t for t in tickers}
                 for i, future in enumerate(as_completed(future_to_ticker)):
                     res = future.result()
                     if res: results.append(res)
                     progress_bar.progress((i + 1) / len(tickers))
-                    status_text.text(f"Processed {i+1}/{len(tickers)} stocks...")
         else:
             for i, t in enumerate(tickers):
                 res = process_ticker(t)
                 if res: results.append(res)
                 progress_bar.progress((i + 1) / len(tickers))
 
-        status_text.text("✅ 大量スキャン完了")
-        
         if results:
             df_res = pd.DataFrame(results)
+            df_res.to_csv(CUSTOM_RESULTS_FILE, index=False)
+            st.rerun()
+    # 保存された結果がある場合は表示
+    if os.path.exists(CUSTOM_RESULTS_FILE):
+        try:
+            df_res = pd.read_csv(CUSTOM_RESULTS_FILE)
             df_res = df_res.sort_values(by="AI Prediction", ascending=False)
-            
-            # 通貨記号の付与
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
-            st.write(f"### 🏆 AI予測収益率ランキング (上位 {len(df_res)}件)")
-            
+            st.write(f"### 🎯 前回の分析結果 ({len(df_res)}件)")
             with st.expander("ℹ️ AI Prediction (Annual) の読み方について"):
-                st.info("""
-                **AI Prediction (Annual) とは：**
-                AI（XGBoost）が直近の株価推移やテクニカル指標から算出した「翌日の予想収益率」を、1年分（252営業日）に換算した数値です。
-                - **+30%**: 今のトレンドが継続した場合、1年後に資産が30%増加するポテンシャルがあることを示唆します。
-                - **信頼度（R2）**: 数値が高いほど、AIが過去のパターンをうまく学習できていることを意味します。
-                *※あくまで過去の傾向に基づく統計的な予測であり、将来の利益を保証するものではありません。*
-                """)
+                st.info("AI（XGBoost）が直近の株価推移から算出した予想年率収益率です。")
 
             st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(50).style.format({"AI Prediction": "{:.2%}"}))
             
-            # ポートフォリオへの追加を提案
-            st.info("💡 上位銘柄を 'My Portfolio' に追加して、強化学習（RL）による詳細な売り時解析を行うことをお勧めします。")
-                
             # 上位3件に対して詳細な投資戦略を生成
             st.subheader("💡 AI Recommended Investment Strategy (Top 3)")
-            # 解析用のエンジンを定義
             report_strategy = AIStrategy(api_key=api_key)
             
             for _, row in df_res.head(3).iterrows():
@@ -376,19 +387,26 @@ with tab2:
                                     s_score = res.get("score", 0)
                                 except: pass
                             
-                            # 投資アドバイスを生成
-                            c_symbol = "¥" if row['Currency']=='JPY' else "$"
-                            price_val = row['Price']
+                            # 予算を銘柄の通貨に合わせて換算する
+                            native_currency = "JPY" if row['Currency']=='JPY' else "USD"
+                            effective_budget = total_budget
+                            if display_currency == "JPY" and native_currency == "USD":
+                                effective_budget = total_budget / usdjpy
+                            elif display_currency == "USD" and native_currency == "JPY":
+                                effective_budget = total_budget * usdjpy
                             
+                            c_symbol = "¥" if native_currency == "JPY" else "$"
                             advice = report_strategy.get_investment_advice(
-                                row['Ticker'], price_val, row['AI Prediction'], 
-                                s_score, total_budget, c_symbol
+                                row['Ticker'], row['Price'], row['AI Prediction'], 
+                                s_score, effective_budget, c_symbol
                             )
                             st.markdown(advice)
                         except Exception as e:
                             st.warning(f"レポート生成に失敗しました: {e}")
-            else:
-                st.info(f"期待収益率 {target_return_filter}% を超える銘柄は見つかりませんでした。")
+        except Exception as e:
+            st.error(f"分析結果の表示中にエラーが発生しました: {e}")
+    else:
+        st.info("💡 まだ手動分析の結果はありません。上のボタンからスキャニングを開始してください。")
 
 with tab3:
     st.subheader("💰 My Portfolio Management")
