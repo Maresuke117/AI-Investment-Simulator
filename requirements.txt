@@ -12,3 +12,4 @@ scikit-learn
 matplotlib
 ta
 numpy
+plotly
