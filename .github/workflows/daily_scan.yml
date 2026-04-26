@@ -35,4 +35,5 @@ jobs:
           git config --local user.name "GitHub Action"
           git add market_scan_results.csv portfolio_scan_results.csv
           git commit -m "Update daily scan and portfolio results [skip ci]" || echo "No changes to commit"
+          git pull --rebase origin master
           git push
