@@ -15,15 +15,21 @@ def prepare_features(df):
     """
     df = df.copy()
     
+    # 必須カラムの確認
+    required = ['Open', 'High', 'Low', 'Close']
+    for col in required:
+        if col not in df.columns:
+            return pd.DataFrame() # 必須データがなければ空を返す
+            
     # 移動平均
     df['SMA_20'] = df['Close'].rolling(window=20).mean()
     df['SMA_50'] = df['Close'].rolling(window=50).mean()
     
-    # RSI (Relative Strength Index)
+    # RSI
     delta = df['Close'].diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
     loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-    rs = gain / loss
+    rs = gain / (loss + 1e-9) # ゼロ除算防止
     df['RSI'] = 100 - (100 / (1 + rs))
     
     # ボリンジャーバンド
@@ -31,8 +37,8 @@ def prepare_features(df):
     df['Upper_BB'] = df['SMA_20'] + (df['Std_20'] * 2)
     df['Lower_BB'] = df['SMA_20'] - (df['Std_20'] * 2)
     
-    # 変化率 (Returns)
-    df['Target'] = df['Close'].shift(-1) / df['Close'] - 1 # 翌日の収益率
+    # 変化率
+    df['Target'] = df['Close'].shift(-1) / df['Close'] - 1
     
     # 欠損値の削除
     df = df.dropna()
@@ -43,32 +49,18 @@ class AIStrategy:
     def __init__(self, api_key=None, precise=False):
         # ハイパーパラメータ設定
         if precise:
-            # 精密モード (じっくり学習)
-            self.model = xgb.XGBRegressor(
-                n_estimators=500,
-                learning_rate=0.01,
-                max_depth=6,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                n_jobs=-1,
-                random_state=42
-            )
+            self.model = xgb.XGBRegressor(n_estimators=500, learning_rate=0.01, max_depth=6, subsample=0.8, n_jobs=-1, random_state=42)
         else:
-            # 高速モード (スクリーニング用)
-            self.model = xgb.XGBRegressor(
-                n_estimators=100,
-                learning_rate=0.1,
-                max_depth=4,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                n_jobs=-1,
-                random_state=42
-            )
-        self.features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'Upper_BB', 'Lower_BB']
+            self.model = xgb.XGBRegressor(n_estimators=100, learning_rate=0.1, max_depth=4, subsample=0.8, n_jobs=-1, random_state=42)
+            
+        # デフォルト特徴量
+        self.base_features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'Upper_BB', 'Lower_BB']
+        self.actual_features = [] # 学習時に確定させる
         
-        # LLM初期化 (Azure OpenAIを優先)
+        # LLM初期化
         self.llm = None
         self.llm_type = None
+        # ... (LLM初期化コードは維持)
         
         azure_key = os.getenv("AZURE_OPENAI_API_KEY")
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
@@ -107,7 +99,11 @@ class AIStrategy:
         XGBoostモデルを学習させる。
         """
         df_feat = prepare_features(df)
-        X = df_feat[self.features]
+        if df_feat.empty: return 0
+        
+        # 実際に存在するカラムから特徴量を選択
+        self.actual_features = [f for f in self.base_features if f in df_feat.columns]
+        X = df_feat[self.actual_features]
         y = df_feat['Target']
         
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -126,7 +122,13 @@ class AIStrategy:
         最新のデータに基づいてシグナルを生成する。
         """
         df_feat = prepare_features(df)
-        X = df_feat[self.features]
+        if df_feat.empty: return pd.DataFrame()
+        
+        # 学習時に確定した特徴量を使用
+        if not self.actual_features:
+            self.actual_features = [f for f in self.base_features if f in df_feat.columns]
+            
+        X = df_feat[self.actual_features]
         
         # 予測
         predictions = self.model.predict(X)

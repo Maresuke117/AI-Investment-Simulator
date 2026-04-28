@@ -13,16 +13,36 @@ def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
         
     print(f"Fetching data for {ticker} using yahooquery...")
     t = Ticker(ticker)
-    df = t.history(period=period, interval=interval)
     
-    if isinstance(df, dict) or df is None or (hasattr(df, 'empty') and df.empty):
+    # リトライロジック (簡易)
+    for _ in range(2):
+        df = t.history(period=period, interval=interval)
+        if df is not None and not (hasattr(df, 'empty') and df.empty):
+            break
+        time.sleep(0.5)
+    
+    if df is None or (hasattr(df, 'empty') and df.empty):
         raise ValueError(f"Ticker '{ticker}' のデータが見つかりませんでした。")
         
-    # yahooqueryの出力形式を調整 (マルチインデックスの解除とカラム名の正規化)
-    if isinstance(df.index, pd.MultiIndex):
-        df = df.reset_index().set_index('date')
-    elif 'date' in df.columns:
-        df = df.set_index('date')
+    # エラーメッセージが返ってきた場合の処理
+    if isinstance(df, dict):
+        error_msg = df.get(ticker, "Unknown Error")
+        raise ValueError(f"Ticker '{ticker}' でエラーが発生しました: {error_msg}")
+        
+    # yahooqueryの出力形式を調整
+    try:
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.reset_index()
+            if 'date' in df.columns:
+                df = df.set_index('date')
+            elif 'Date' in df.columns:
+                df = df.set_index('Date')
+        elif 'date' in df.columns:
+            df = df.set_index('date')
+        elif 'Date' in df.columns:
+            df = df.set_index('Date')
+    except Exception as e:
+        print(f"Index adjustment failed for {ticker}: {e}")
         
     # カラム名を大文字開始に統一 (yfinance 互換)
     rename_map = {
@@ -31,23 +51,35 @@ def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
     }
     df = df.rename(columns=rename_map)
     
-    # 型変換とインデックス調整
-    df.index = pd.to_datetime(df.index).tz_localize(None)
-    
-    # 通貨情報の取得 (yahooquery)
-    currency = "USD" # デフォルト
-    name = ticker    # デフォルト
+    # 通貨情報の取得 (安全な取得)
+    currency = "JPY" if ticker.endswith('.T') else "USD"
+    name = ticker
     try:
-        # 複数のソースから通貨と銘柄情報を探す
-        summary = t.summary_detail.get(ticker, {})
-        price_info = t.price.get(ticker, {})
-        currency = price_info.get('currency') or summary.get('currency') or "USD"
-        name = price_info.get('shortName') or summary.get('shortName') or ticker
-    except:
-        pass
+        # 取得したDataFrameのインデックスを日付型に変換
+        # MultiIndex(symbol, date) の場合は symbol を消して date だけにする
+        if isinstance(df.index, pd.MultiIndex):
+            df = df.reset_index(level=0, drop=True)
         
-    if ticker.endswith('.T') and currency == "USD":
-        currency = "JPY"
+        # インデックスを確実に日付型にしてタイムゾーンを消す
+        df.index = pd.to_datetime(df.index).tz_localize(None)
+        
+        # メタデータの取得 (直接アクセスを避けて get_modules を使用)
+        modules = t.get_modules(['summaryDetail', 'price'])
+        if isinstance(modules, dict) and ticker in modules:
+            m_data = modules[ticker]
+            if isinstance(m_data, dict):
+                # price モジュール
+                p_info = m_data.get('price', {})
+                if isinstance(p_info, dict):
+                    currency = p_info.get('currency') or currency
+                    name = p_info.get('shortName') or name
+                
+                # summaryDetail モジュール
+                s_detail = m_data.get('summaryDetail', {})
+                if isinstance(s_detail, dict):
+                    currency = s_detail.get('currency') or currency
+    except Exception as e:
+        print(f"Metadata/Index adjustment failed for {ticker}: {e}")
         
     return df, currency, name
 
