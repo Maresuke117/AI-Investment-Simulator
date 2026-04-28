@@ -691,7 +691,7 @@ with tab3:
                 profit_pct = 0
                 advice = "未分析 (上のボタンを押してください)"
                 comp_name = ticker
-                currency = "USD"
+                # currency は登録時の設定をそのまま維持する
             
             # 通貨換算ロジック (表示用)
             native_currency = "JPY" if currency == "JPY" else "USD"
