@@ -40,17 +40,30 @@ def prepare_features(df):
     return df
 
 class AIStrategy:
-    def __init__(self, api_key=None):
-        # XGBoostのハイパーパラメータ設定 (高速化と精度のバランス)
-        self.model = xgb.XGBRegressor(
-            n_estimators=200, # 500から200に削減して高速化
-            learning_rate=0.05, # 学習率を少し上げて収束を早める
-            max_depth=5,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            n_jobs=-1, # マルチスレッド化
-            random_state=42
-        )
+    def __init__(self, api_key=None, precise=False):
+        # ハイパーパラメータ設定
+        if precise:
+            # 精密モード (じっくり学習)
+            self.model = xgb.XGBRegressor(
+                n_estimators=500,
+                learning_rate=0.01,
+                max_depth=6,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                n_jobs=-1,
+                random_state=42
+            )
+        else:
+            # 高速モード (スクリーニング用)
+            self.model = xgb.XGBRegressor(
+                n_estimators=100,
+                learning_rate=0.1,
+                max_depth=4,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                n_jobs=-1,
+                random_state=42
+            )
         self.features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'Upper_BB', 'Lower_BB']
         
         # LLM初期化 (Azure OpenAIを優先)
