@@ -246,7 +246,7 @@ with tab1:
             st.error(f"Error: {e}")
 
 with tab2:
-    st.subheader("🚀 Global Market Mass Screener")
+    st.subheader("🚀 Global Market Mass Screener (Updated)")
     
     # 自動スキャン結果の表示セクション
     if os.path.exists(RESULTS_FILE):
@@ -258,7 +258,15 @@ with tab2:
                 # 通貨記号の付与
                 df_auto['Price_Display'] = df_auto.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
                 
+                # Ticker一括コピー機能 (テーブルの上にも配置)
+                st.info("📋 **Ticker 一括コピー用 (上位20件)**")
+                st.code(",".join(df_auto['Ticker'].head(20).tolist()))
+                
                 st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(20).style.format({"AI Prediction": "{:.2%}"}))
+                
+                # Ticker一括コピー機能の追加
+                st.write("📋 **Ticker 一括コピー用 (上位20件)**")
+                st.code(",".join(df_auto['Ticker'].head(20).tolist()))
                 
                 # 自動スキャンの上位5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
@@ -312,7 +320,7 @@ with tab2:
                 st.error(f"スキャン結果の読み込みに失敗しました: {e}")
     
     st.markdown("---")
-    st.subheader("🛠 カスタム・一括スキャナー")
+    st.subheader("🛠 カスタム・一括スキャナー (Updated)")
     st.markdown("特定の銘柄群を今すぐ手動でスキャンしたい場合に使用してください。")
     
     # プリセット銘柄の定義
@@ -425,7 +433,15 @@ with tab2:
             with st.expander("ℹ️ AI Prediction (Annual) の読み方について"):
                 st.info("AI（XGBoost）が直近の株価推移から算出した予想年率収益率です。")
 
+            # Ticker一括コピー機能 (テーブルの上にも配置)
+            st.info("📋 **Ticker 一括コピー用 (上位50件)**")
+            st.code(",".join(df_res['Ticker'].head(50).tolist()))
+
             st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(50).style.format({"AI Prediction": "{:.2%}"}))
+            
+            # Ticker一括コピー機能の追加
+            st.write("📋 **Ticker 一括コピー用 (上位50件)**")
+            st.code(",".join(df_res['Ticker'].head(50).tolist()))
             
             # 上位5件に対して詳細な投資戦略を生成
             st.subheader("💡 AI Recommended Investment Strategy (Top 5)")

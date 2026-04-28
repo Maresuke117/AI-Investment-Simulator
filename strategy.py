@@ -55,12 +55,12 @@ class AIStrategy:
                 genai.configure(api_key=api_key)
                 # 利用可能なモデルをリストアップして、最適なものを探す
                 models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                # 'gemini-1.5-flash' があれば優先、なければ最初に見つかったものを使用
-                selected_model = 'gemini-1.5-flash'
-                if not any(selected_model in m for m in models):
+                # 'gemini-1.5-flash' を最優先（無料枠が大きく安定しているため）
+                selected_model = 'models/gemini-1.5-flash'
+                if not any('gemini-1.5-flash' in m for m in models):
                     selected_model = models[0] if models else 'gemini-pro'
                 
-                print(f"Selected Gemini Model: {selected_model}")
+                print(f"Using Gemini Model: {selected_model}")
                 self.llm = genai.GenerativeModel(selected_model)
             except Exception as e:
                 print(f"LLM Setup Error: {e}")
