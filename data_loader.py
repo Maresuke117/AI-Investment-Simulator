@@ -35,11 +35,17 @@ def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
     df.index = pd.to_datetime(df.index).tz_localize(None)
     
     # 通貨情報の取得 (yahooquery)
-    try:
-        summary = t.summary_detail.get(ticker, {})
-        currency = summary.get('currency', 'USD')
-    except:
-        currency = 'USD'
+    currency = "USD" # デフォルト
+    if ticker.endswith('.T'):
+        currency = "JPY"
+    else:
+        try:
+            # 複数のソースから通貨情報を探す
+            summary = t.summary_detail.get(ticker, {})
+            price_info = t.price.get(ticker, {})
+            currency = price_info.get('currency') or summary.get('currency') or "USD"
+        except:
+            currency = "USD"
         
     return df, currency
 

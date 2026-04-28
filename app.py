@@ -598,14 +598,15 @@ with tab3:
     with st.expander("➕ 新しい持ち株を登録する"):
         st.info("💡 日本株は銘柄コード（例: 7203）を入力すると円建て、米国株（例: AAPL）はドル建てとして扱われます。")
         with st.form("add_holding_form"):
-            new_ticker = st.text_input("銘柄コード (例: 7203, NVDA)")
-            new_price = st.number_input("取得単価 (日本株は円、米国株はドル)", min_value=0.0, step=0.1)
+            new_ticker = st.text_input("銘柄コード (例: 7203, NVDA)", help="日本株は4桁の数字、米国株はシンボルを入力してください")
+            new_price = st.number_input("取得単価", min_value=0.0, step=0.1, help="選択した通貨での単価を入力してください")
+            new_currency = st.radio("通貨", options=["JPY", "USD"], horizontal=True)
             new_qty = st.number_input("数量", min_value=0, step=1)
             if st.form_submit_button("登録"):
-                new_row = pd.DataFrame([{"Ticker": new_ticker, "Buy Price": new_price, "Quantity": new_qty}])
+                new_row = pd.DataFrame([{"Ticker": new_ticker, "Buy Price": new_price, "Quantity": new_qty, "Currency": new_currency}])
                 portfolio_df = pd.concat([portfolio_df, new_row], ignore_index=True)
                 save_portfolio(portfolio_df)
-                st.success(f"{new_ticker} を登録しました！")
+                st.success(f"{new_ticker} ({new_currency}) を登録しました！")
                 st.rerun()
 
     if not portfolio_df.empty:
@@ -622,8 +623,11 @@ with tab3:
                     ticker = row['Ticker']
                     status.write(f"Analyzing {ticker}...")
                     try:
-                        data, currency = get_stock_data(ticker, period="2y")
+                        data, _detected_currency = get_stock_data(ticker, period="2y")
                         data = prepare_features(data)
+                        
+                        # ユーザー指定の通貨があれば優先
+                        currency = row.get('Currency', _detected_currency)
                         
                         strategy = AIStrategy(api_key=api_key)
                         score = strategy.train(data)
@@ -659,6 +663,8 @@ with tab3:
         portfolio_results = []
         for index, row in portfolio_df.iterrows():
             ticker = row['Ticker']
+            # 通貨の取得 (CSVに保存された値を優先)
+            currency = row.get('Currency', "USD")
             analysis = st.session_state.portfolio_analysis.get(ticker)
             
             if analysis:
@@ -691,6 +697,7 @@ with tab3:
             portfolio_results.append({
                 "銘柄名": comp_name,
                 "コード": ticker,
+                "通貨": native_currency,
                 "数量": row['Quantity'],
                 f"買値 ({display_currency})": f"{currency_symbol}{disp_buy:,.1f}",
                 f"現在値 ({display_currency})": f"{currency_symbol}{disp_curr:,.1f}",
