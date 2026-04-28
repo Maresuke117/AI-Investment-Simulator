@@ -621,9 +621,11 @@ with tab3:
     if not portfolio_df.empty:
         st.subheader("現在の保有状況とAIアドバイス")
         
-        # 保有銘柄の分析結果を保存するセッション状態の初期化
+        # 保有銘柄の分析結果と詳細レポートを保存するセッション状態の初期化
         if 'portfolio_analysis' not in st.session_state:
             st.session_state.portfolio_analysis = {}
+        if 'detailed_reports' not in st.session_state:
+            st.session_state.detailed_reports = {}
         
         # 一括分析ボタン
         if st.button("🚀 全銘柄を一括AI分析", type="primary"):
@@ -763,10 +765,15 @@ with tab3:
                                     
                                     strategy = AIStrategy(api_key=api_key)
                                     raw_s = strategy.get_sentiment(ticker, news_text)
-                                    # ... (省略: 以前のレポート生成ロジック) ...
-                                    st.markdown(strategy.get_investment_advice(ticker, analysis['Price'], analysis['Prediction'], 0.5, total_budget, currency_symbol))
+                                    report = strategy.get_investment_advice(ticker, analysis['Price'], analysis['Prediction'], 0.5, total_budget, currency_symbol)
+                                    st.session_state.detailed_reports[ticker] = report
                                 except Exception as e:
                                     st.error(f"レポート生成失敗: {e}")
+                        
+                        # 保存されているレポートがあれば表示
+                        if ticker in st.session_state.detailed_reports:
+                            st.markdown("---")
+                            st.markdown(st.session_state.detailed_reports[ticker])
                     else:
                         st.write("詳細を表示するには一括分析を実行してください。")
                 
