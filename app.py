@@ -372,12 +372,15 @@ with tab2:
                 else:
                     st.write("該当なし")
                 
-                # 自動スキャンの上位5件に対して詳細な投資戦略を生成
+                # 自動スキャンの最優先5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
                 report_strategy = AIStrategy(api_key=api_key)
                 report_cache = load_report_cache()
                 
-                for _, row in df_auto.head(5).iterrows():
+                # Tier 1を優先し、足りない場合はTier 2から補充
+                df_reports = pd.concat([df_tier1, df_tier2]).head(5)
+                
+                for _, row in df_reports.iterrows():
                     ticker = row['Ticker']
                     cache_key = f"{ticker}_{row['Price']:.1f}"
                     
