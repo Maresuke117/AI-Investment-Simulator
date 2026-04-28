@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import plotly.graph_objects as go
 import yfinance as yf
 from data_loader import get_stock_data, search_ticker
