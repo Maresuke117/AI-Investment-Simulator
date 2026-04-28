@@ -626,10 +626,15 @@ with tab3:
                         data, _detected_currency = get_stock_data(ticker, period="2y")
                         data = prepare_features(data)
                         
-                        # 登録時の通貨設定を絶対とし、ない場合のみ推測
-                        currency = row.get('Currency')
-                        if pd.isna(currency):
-                            currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+                        # 日本株形式（4桁数字や.T）なら、保存値を無視して強制的にJPYにする
+                        if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
+                            currency = "JPY"
+                        else:
+                            # それ以外は登録時の通貨設定を優先し、ない場合のみ推測
+                            currency = row.get('Currency')
+                            if pd.isna(currency):
+                                currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+
 
                         
                         strategy = AIStrategy(api_key=api_key)
@@ -666,10 +671,15 @@ with tab3:
         portfolio_results = []
         for index, row in portfolio_df.iterrows():
             ticker = row['Ticker']
-            # 登録時の通貨設定を絶対とし、ない場合のみ推測
-            currency = row.get('Currency')
-            if pd.isna(currency):
-                currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+            # 日本株形式（4桁数字や.T）なら、保存値を無視して強制的にJPYにする
+            if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
+                currency = "JPY"
+            else:
+                # 登録時の通貨設定を優先し、ない場合のみ推測
+                currency = row.get('Currency')
+                if pd.isna(currency):
+                    currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+
 
                 
             analysis = st.session_state.portfolio_analysis.get(ticker)
