@@ -27,40 +27,51 @@ def get_all_target_tickers():
     # 1. 米国株 (Russell 1000相当)
     us_tickers = []
     try:
-        url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
-        res = requests.get(url)
-        df_us = pd.read_csv(io.StringIO(res.text))
-        for _, row in df_us.iterrows():
-            ticker = row['Symbol'].replace('.', '-')
-            us_tickers.append(ticker)
-            NAME_CACHE[ticker] = row['Name']
+        # 複数のソースを試行
+        urls = [
+            "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv",
+            "https://pkgstore.datahub.io/core/s-and-p-500-companies/constituents_csv/data/ac117143448e89b91e9f13e71618197e/constituents_csv.csv"
+        ]
+        for url in urls:
+            try:
+                res = requests.get(url, timeout=10)
+                if res.status_code == 200:
+                    df_us = pd.read_csv(io.StringIO(res.text))
+                    for _, row in df_us.iterrows():
+                        ticker = str(row['Symbol']).replace('.', '-')
+                        us_tickers.append(ticker)
+                        NAME_CACHE[ticker] = row['Name']
+                    if len(us_tickers) > 400: break
+            except: continue
             
-        # 主要追加銘柄
+        # 主要追加銘柄 (Russell 1000上位の補完)
         additional_us = {
             "TSLA": "Tesla, Inc.", "NVDA": "NVIDIA Corporation", "AMD": "Advanced Micro Devices, Inc.",
-            "PLTR": "Palantir Technologies Inc.", "ARM": "Arm Holdings plc", "SMCI": "Super Micro Computer, Inc."
+            "PLTR": "Palantir Technologies Inc.", "ARM": "Arm Holdings plc", "SMCI": "Super Micro Computer, Inc.",
+            "AVGO": "Broadcom Inc.", "ORCL": "Oracle Corporation", "COST": "Costco Wholesale Corporation"
         }
         for t, n in additional_us.items():
-            us_tickers.append(t)
-            NAME_CACHE[t] = n
+            if t not in us_tickers:
+                us_tickers.append(t)
+                NAME_CACHE[t] = n
         us_tickers = list(set(us_tickers))
-    except:
+        print(f"🇺🇸 米国株: {len(us_tickers)} 銘柄を取得。")
+    except Exception as e:
+        print(f"⚠️ 米国株リスト取得エラー: {e}")
         us_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
 
     # 2. 日本株 (JPX日経400限定)
     jp_tickers = []
     try:
-        print("🔍 JPX日経400銘柄リストを取得中...")
         url_jpx400 = "https://www.jpx.co.jp/markets/indices/jpx-nikkei400/tvdivq0000001vg2-att/jpxnk400_weight_j.csv"
         headers = {'User-Agent': 'Mozilla/5.0'}
-        res = requests.get(url_jpx400, headers=headers)
+        res = requests.get(url_jpx400, headers=headers, timeout=10)
         
         try:
             df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='cp932')
         except:
             df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='utf-8-sig')
             
-        # コードと銘柄名を取得
         code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col][0]
         name_col = [col for col in df_jpx400.columns if '銘柄名' in col or 'Name' in col][0]
         
@@ -73,9 +84,9 @@ def get_all_target_tickers():
                 jp_tickers.append(ticker)
                 NAME_CACHE[ticker] = name
                         
-        print(f"✅ JPX日経400: {len(jp_tickers)} 銘柄を抽出完了。")
+        print(f"🇯🇵 日本株 (JPX400): {len(jp_tickers)} 銘柄を取得。")
     except Exception as e:
-        print(f"⚠️ JPX400リスト取得失敗: {e}")
+        print(f"⚠️ JPX400リスト取得エラー: {e}")
         jp_tickers = ["7203.T", "6758.T", "6861.T"]
 
     return us_tickers, jp_tickers
@@ -98,17 +109,17 @@ def stage1_screening(ticker):
         
         score = 0
         # 1. 強いトレンド (20日線 > 50日線 ＆ 株価 > 20日線)
-        if latest['Close'] > latest['SMA_20'] and latest['SMA_20'] > latest['SMA_50']:
-            score += 2
+        if latest['Close'] > latest['SMA_20']: score += 1
+        if latest['SMA_20'] > latest['SMA_50']: score += 1
         
         # 2. 適正なRSI (買われすぎず、売られすぎず)
         if 40 < latest['RSI'] < 65: score += 1
         
         # 3. 低ボラティリティ (値動きが素直)
         vol = data['Close'].pct_change().tail(20).std()
-        if vol < 0.02: score += 1
+        if vol < 0.025: score += 1
         
-        if score < 2: return None # 2点以上を合格とする (厳格)
+        if score < 1: return None # 1点以上を合格とする (門戸を広げる)
         
         return {"Ticker": ticker, "ScreeningScore": score, "Name": name}
     except: return None
