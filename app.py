@@ -756,7 +756,10 @@ with tab3:
                                     if callable(news):
                                         news = news()
                                     
-                                    news_text = "\n".join([n.get('title', '') for n in news[:5]]) if news and not callable(news) else "No news found"
+                                    news_text = "No news found"
+                                    if news and isinstance(news, list):
+                                        # 各要素が辞書であることを確認しながらタイトルを抽出
+                                        news_text = "\n".join([n.get('title', '') for n in news[:5] if isinstance(n, dict)])
                                     
                                     strategy = AIStrategy(api_key=api_key)
                                     raw_s = strategy.get_sentiment(ticker, news_text)
