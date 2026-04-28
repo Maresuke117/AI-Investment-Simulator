@@ -84,8 +84,9 @@ def run_mass_scan():
     if results:
         df_all = pd.DataFrame(results)
         
-        # 1. 市場全体のランキング保存 (ConfidenceとPredictionでソート)
-        df_market = df_all[df_all['Ticker'].isin(TICKERS_US + TICKERS_JP)].sort_values(by=["Confidence", "AI Prediction"], ascending=[False, False])
+        # 1. 市場全体のランキング保存 (期待値スコア = AI Prediction * Confidence でソート)
+        df_all['Score'] = np.where(df_all['Confidence'] > 0, df_all['AI Prediction'] * df_all['Confidence'], -9999)
+        df_market = df_all[df_all['Ticker'].isin(TICKERS_US + TICKERS_JP)].sort_values(by="Score", ascending=False)
         df_market.to_csv(RESULTS_FILE, index=False)
         
         # 2. ポートフォリオの診断結果保存
