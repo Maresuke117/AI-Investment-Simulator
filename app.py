@@ -752,7 +752,11 @@ with tab3:
                                 try:
                                     t_obj = Ticker(ticker)
                                     news = t_obj.news
-                                    news_text = "\n".join([n.get('title', '') for n in news[:5]]) if news else "No news found"
+                                    # news がメソッドの場合は呼び出して結果を得る
+                                    if callable(news):
+                                        news = news()
+                                    
+                                    news_text = "\n".join([n.get('title', '') for n in news[:5]]) if news and not callable(news) else "No news found"
                                     
                                     strategy = AIStrategy(api_key=api_key)
                                     raw_s = strategy.get_sentiment(ticker, news_text)
