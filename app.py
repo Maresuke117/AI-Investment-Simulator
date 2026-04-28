@@ -268,6 +268,8 @@ with tab2:
         with st.expander("📅 最新の自動スキャン結果を表示 (AI推薦銘柄ランキング)", expanded=True):
             try:
                 df_auto = pd.read_csv(RESULTS_FILE)
+                if 'Confidence' not in df_auto.columns:
+                    df_auto['Confidence'] = 0.0
                 st.write(f"最終更新: {time.ctime(os.path.getmtime(RESULTS_FILE))}")
                 
                 # 通貨記号の付与
@@ -468,6 +470,8 @@ with tab2:
     if os.path.exists(CUSTOM_RESULTS_FILE):
         try:
             df_res = pd.read_csv(CUSTOM_RESULTS_FILE)
+            if 'Confidence' not in df_res.columns:
+                df_res['Confidence'] = 0.0
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
             # 1. 予測がマイナスのものは除外
