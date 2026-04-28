@@ -721,14 +721,30 @@ with tab3:
         
         # 個別詳細と削除機能
         for index, row in portfolio_df.iterrows():
-            ticker = row['Ticker']
+            ticker = str(row['Ticker'])
             analysis = st.session_state.portfolio_analysis.get(ticker)
+            
+            # 通貨と表示名の再取得
+            curr_item = row.get('Currency', 'USD')
+            if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
+                curr_item = "JPY"
+            
+            c_symbol = "¥" if display_currency == "JPY" else "$"
+            d_buy = row['Buy Price']
+            
+            # 為替換算 (詳細表示用)
+            if display_currency == "JPY" and curr_item == "USD":
+                d_buy *= usdjpy
+            elif display_currency == "USD" and curr_item == "JPY":
+                d_buy /= usdjpy
+                
+            c_name = analysis['Name'] if analysis else ticker
             
             with st.expander(f"🔍 {ticker} の詳細管理"):
                 col1, col2 = st.columns([3, 1])
                 with col1:
-                    st.write(f"**銘柄名:** {comp_name}")
-                    st.write(f"**取得単価:** {currency_symbol}{disp_buy:,.1f} ({display_currency})")
+                    st.write(f"**銘柄名:** {c_name}")
+                    st.write(f"**取得単価:** {c_symbol}{d_buy:,.1f} ({display_currency})")
                     if analysis:
                         # 詳細AIレポート
                         if st.button(f"📖 {ticker} の詳細AIレポートを生成", key=f"rpt_{ticker}"):
