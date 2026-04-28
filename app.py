@@ -320,36 +320,52 @@ with tab2:
                 df_auto['Price_Display'] = df_auto.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
                 
                 # データのフィルタリングと分類
-                # 1. 予測がマイナスのものは除外
+                # 0. 予測がマイナスのものは除外
                 df_all_plus = df_auto[df_auto['AI Prediction'] > 0].copy()
                 
-                # 2. メイン (Confidence > -1.0)
-                df_main = df_all_plus[df_all_plus['Confidence'] > -1.0].copy()
                 # スコア計算 (ソート用)
-                df_main['Score'] = df_main['AI Prediction'] * np.where(df_main['Confidence'] > 0, df_main['Confidence'], 0.001)
-                df_main = df_main.sort_values(by="Score", ascending=False)
+                df_all_plus['Score'] = df_all_plus['AI Prediction'] * (df_all_plus['Confidence'] + 1.0)
+                df_all_plus = df_all_plus.sort_values(by="Score", ascending=False)
                 
-                # 3. 別枠 (Confidence <= -1.0)
-                df_sub = df_all_plus[df_all_plus['Confidence'] <= -1.0].copy()
-                df_sub = df_sub.sort_values(by="Confidence", ascending=False)
+                # 1. 第一優先 (Confidence > 0)
+                df_tier1 = df_all_plus[df_all_plus['Confidence'] > 0].copy()
                 
-                # --- メインセクション ---
-                st.markdown("### 🎯 AI Recommended (上昇予測 ＆ 信頼度 -1.0超)")
-                if not df_main.empty:
-                    st.info(f"📋 **メイン銘柄 Ticker 一括コピー ({len(df_main)}件)**")
-                    st.code(",".join(df_main['Ticker'].tolist()))
-                    st.table(df_main[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                # 2. 第二優先 (-1 <= Confidence <= 0)
+                df_tier2 = df_all_plus[(df_all_plus['Confidence'] <= 0) & (df_all_plus['Confidence'] >= -1.0)].copy()
+                
+                # 3. 別枠 (Confidence < -1.0)
+                df_tier3 = df_all_plus[df_all_plus['Confidence'] < -1.0].copy()
+                df_tier3 = df_tier3.sort_values(by="Confidence", ascending=False)
+                
+                # --- 第一優先セクション ---
+                st.markdown("### 🎯 優先度1: AI Recommended (上昇予測 ＆ 信頼度プラス)")
+                if not df_tier1.empty:
+                    st.info(f"📋 **第一優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
+                    st.code(",".join(df_tier1['Ticker'].tolist()))
+                    st.table(df_tier1[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                         "AI Prediction": "{:.2%}",
                         "Confidence": "{:.4f}"
                     }))
                 else:
-                    st.warning("メイン条件を満たす銘柄はありません。")
+                    st.warning("優先度1の条件を満たす銘柄はありません。")
+                
+                # --- 第二優先セクション ---
+                st.markdown("### 🟢 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
+                if not df_tier2.empty:
+                    st.info(f"📋 **第二優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
+                    st.code(",".join(df_tier2['Ticker'].tolist()))
+                    st.table(df_tier2[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                        "AI Prediction": "{:.2%}",
+                        "Confidence": "{:.4f}"
+                    }))
+                else:
+                    st.warning("優先度2の条件を満たす銘柄はありません。")
                 
                 # --- 別枠セクション (折りたたみ) ---
-                with st.expander("⚠️ 参考：上昇予測だが信頼度が極めて低い銘柄 (Confidence ≦ -1.0)"):
+                with st.expander("⚠️ 優先度3: 参考 (上昇予測だが信頼度 -1.0未満)"):
                     st.write("AIは上昇を予測していますが、モデルの信頼度が極めて低いため注意が必要です。")
-                    if not df_sub.empty:
-                        st.table(df_sub[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                    if not df_tier3.empty:
+                        st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                             "AI Prediction": "{:.2%}",
                             "Confidence": "{:.4f}"
                         }))
@@ -518,37 +534,53 @@ with tab2:
                 df_res['Confidence'] = 0.0
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
-            # 1. 予測がマイナスのものは除外
+            # 0. 予測がマイナスのものは除外
             df_all_plus = df_res[df_res['AI Prediction'] > 0].copy()
             
-            # 2. メイン (Confidence > -1.0)
-            df_main = df_all_plus[df_all_plus['Confidence'] > -1.0].copy()
-            # スコア計算 (ソート用: Confidenceが正なら掛け算、負なら最小限の重み)
-            df_main['Score'] = df_main['AI Prediction'] * np.where(df_main['Confidence'] > 0, df_main['Confidence'], 0.001)
-            df_main = df_main.sort_values(by="Score", ascending=False)
+            # スコア計算 (ソート用)
+            df_all_plus['Score'] = df_all_plus['AI Prediction'] * (df_all_plus['Confidence'] + 1.0)
+            df_all_plus = df_all_plus.sort_values(by="Score", ascending=False)
             
-            # 3. 別枠 (Confidence <= -1.0)
-            df_sub = df_all_plus[df_all_plus['Confidence'] <= -1.0].copy()
-            df_sub = df_sub.sort_values(by="Confidence", ascending=False)
+            # 1. 第一優先 (Confidence > 0)
+            df_tier1 = df_all_plus[df_all_plus['Confidence'] > 0].copy()
+            
+            # 2. 第二優先 (-1 <= Confidence <= 0)
+            df_tier2 = df_all_plus[(df_all_plus['Confidence'] <= 0) & (df_all_plus['Confidence'] >= -1.0)].copy()
+            
+            # 3. 別枠 (Confidence < -1.0)
+            df_tier3 = df_all_plus[df_all_plus['Confidence'] < -1.0].copy()
+            df_tier3 = df_tier3.sort_values(by="Confidence", ascending=False)
 
             st.write(f"### 🎯 分析結果 ({len(df_res)}件中、上昇予測 {len(df_all_plus)}件)")
             
-            # --- メインセクション ---
-            st.markdown("#### 🌟 AI Recommended (上昇予測 ＆ 信頼度 -1.0超)")
-            if not df_main.empty:
-                st.info(f"📋 **メイン銘柄 Ticker 一括コピー ({len(df_main)}件)**")
-                st.code(",".join(df_main['Ticker'].tolist()))
-                st.table(df_main[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+            # --- 第一優先セクション ---
+            st.markdown("#### 🌟 優先度1: AI Recommended (上昇予測 ＆ 信頼度プラス)")
+            if not df_tier1.empty:
+                st.info(f"📋 **第一優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
+                st.code(",".join(df_tier1['Ticker'].tolist()))
+                st.table(df_tier1[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                     "AI Prediction": "{:.2%}",
                     "Confidence": "{:.4f}"
                 }))
             else:
-                st.warning("メイン条件を満たす銘柄はありませんでした。")
+                st.warning("優先度1の条件を満たす銘柄はありませんでした。")
+                
+            # --- 第二優先セクション ---
+            st.markdown("#### 🟢 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
+            if not df_tier2.empty:
+                st.info(f"📋 **第二優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
+                st.code(",".join(df_tier2['Ticker'].tolist()))
+                st.table(df_tier2[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                    "AI Prediction": "{:.2%}",
+                    "Confidence": "{:.4f}"
+                }))
+            else:
+                st.warning("優先度2の条件を満たす銘柄はありませんでした。")
             
             # --- 別枠セクション ---
-            with st.expander("⚠️ 参考：上昇予測だが信頼度が極めて低い銘柄 (Confidence ≦ -1.0)"):
-                if not df_sub.empty:
-                    st.table(df_sub[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+            with st.expander("⚠️ 優先度3: 参考 (上昇予測だが信頼度 -1.0未満)"):
+                if not df_tier3.empty:
+                    st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                         "AI Prediction": "{:.2%}",
                         "Confidence": "{:.4f}"
                     }))
