@@ -189,18 +189,16 @@ with tab1:
                 st.subheader("📰 AI Sentiment Analysis (Gemini Pro)")
                 with st.spinner("Analyzing recent news..."):
                     try:
-                        # yfinanceからニュースを取得
-                        stock = yf.Ticker(target_ticker)
+                        # yahooqueryからニュースを取得
+                        stock = Ticker(target_ticker)
                         news = stock.news
                         
                         if news and isinstance(news, list):
                             news_items = []
                             for n in news[:8]:
-                                # ネストされた構造 (content) からデータを取得
-                                content = n.get('content', {})
-                                title = content.get('title') or content.get('headline')
-                                summary = content.get('summary') or ""
-                                provider = content.get('provider', {}).get('displayName', 'Unknown')
+                                title = n.get('title')
+                                summary = n.get('summary', "")
+                                provider = n.get('publisher', 'Unknown')
                                 
                                 if title:
                                     news_items.append(f"- {title} ({provider})\n  要約: {summary[:100]}...")

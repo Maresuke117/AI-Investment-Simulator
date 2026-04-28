@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import yfinance as yf
+from yahooquery import Ticker
 from data_loader import get_stock_data, prepare_features
 from strategy import AIStrategy
 import requests
@@ -59,11 +59,12 @@ def run_daily_batch():
             strategy.train_rl(data, total_timesteps=2000)
             rl_advice, _ = strategy.get_rl_advice(data, buy_price)
             
-            # 5. Gemini センチメント
-            news = yf.Ticker(ticker).news
+            # 5. AI センチメント
+            t = Ticker(ticker)
+            news = t.news
             s_score = "N/A"
             if news:
-                news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                news_text = "\n".join([n.get('title', '') for n in news[:5]])
                 try:
                     import json
                     raw_s = strategy.get_sentiment(ticker, news_text)
