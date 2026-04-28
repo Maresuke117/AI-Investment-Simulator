@@ -45,7 +45,8 @@ def process_single_stock(ticker):
         if len(data) < 100: return None
         data = prepare_features(data)
         strategy = AIStrategy(api_key=GEMINI_API_KEY)
-        strategy.train(data)
+        # 1. XGBoost 学習
+        score = strategy.train(data)
         signals = strategy.predict_signals(data)
         avg_pred = signals['Prediction'].tail(5).mean()
         annualized_pred = avg_pred * 252
@@ -56,7 +57,7 @@ def process_single_stock(ticker):
         return {
             "Name": name, "Ticker": ticker, "Price": signals['Close'].iloc[-1],
             "Currency": currency, "AI Prediction": annualized_pred,
-            "Confidence": strategy.train(data)
+            "Confidence": score
         }
     except: return None
 
@@ -83,8 +84,8 @@ def run_mass_scan():
     if results:
         df_all = pd.DataFrame(results)
         
-        # 1. 市場全体のランキング保存
-        df_market = df_all[df_all['Ticker'].isin(TICKERS_US + TICKERS_JP)].sort_values(by="AI Prediction", ascending=False)
+        # 1. 市場全体のランキング保存 (ConfidenceとPredictionでソート)
+        df_market = df_all[df_all['Ticker'].isin(TICKERS_US + TICKERS_JP)].sort_values(by=["Confidence", "AI Prediction"], ascending=[False, False])
         df_market.to_csv(RESULTS_FILE, index=False)
         
         # 2. ポートフォリオの診断結果保存
@@ -107,7 +108,7 @@ def send_discord_summary(top_df, p_df):
     
     msg += "📈 **市場全体の有望銘柄 TOP 10**\n"
     for i, (_, row) in enumerate(top_df.iterrows()):
-        msg += f"{i+1}. {row['Name']} ({row['Ticker']}): **{row['AI Prediction']:.1%}**\n"
+        msg += f"{i+1}. {row['Name']} ({row['Ticker']}): **{row['AI Prediction']:.1%}** (信頼度: {row['Confidence']:.3f})\n"
     
     if not p_df.empty:
         msg += "\n💼 **あなたのポートフォリオ診断**\n"

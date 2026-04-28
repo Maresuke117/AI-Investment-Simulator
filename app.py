@@ -246,7 +246,7 @@ with tab1:
             st.error(f"Error: {e}")
 
 with tab2:
-    st.subheader("🚀 Global Market Mass Screener (Updated)")
+    st.subheader("🚀 Global Market Mass Screener")
     
     # 自動スキャン結果の表示セクション
     if os.path.exists(RESULTS_FILE):
@@ -262,11 +262,13 @@ with tab2:
                 st.info("📋 **Ticker 一括コピー用 (上位20件)**")
                 st.code(",".join(df_auto['Ticker'].head(20).tolist()))
                 
-                st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(20).style.format({"AI Prediction": "{:.2%}"}))
+                # Confidenceでソートし直し（上位表示）
+                df_auto = df_auto.sort_values(by=["Confidence", "AI Prediction"], ascending=[False, False])
                 
-                # Ticker一括コピー機能の追加
-                st.write("📋 **Ticker 一括コピー用 (上位20件)**")
-                st.code(",".join(df_auto['Ticker'].head(20).tolist()))
+                st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].head(20).style.format({
+                    "AI Prediction": "{:.2%}",
+                    "Confidence": "{:.4f}"
+                }))
                 
                 # 自動スキャンの上位5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
@@ -320,7 +322,7 @@ with tab2:
                 st.error(f"スキャン結果の読み込みに失敗しました: {e}")
     
     st.markdown("---")
-    st.subheader("🛠 カスタム・一括スキャナー (Updated)")
+    st.subheader("🛠 カスタム・一括スキャナー")
     st.markdown("特定の銘柄群を今すぐ手動でスキャンしたい場合に使用してください。")
     
     # プリセット銘柄の定義
@@ -400,7 +402,7 @@ with tab2:
                     "Price": signals['Close'].iloc[-1],
                     "Currency": currency,
                     "AI Prediction": annualized_pred,
-                    "R2": strategy.train(data)
+                    "Confidence": strategy.train(data)
                 }
             except:
                 return None
@@ -426,7 +428,8 @@ with tab2:
     if os.path.exists(CUSTOM_RESULTS_FILE):
         try:
             df_res = pd.read_csv(CUSTOM_RESULTS_FILE)
-            df_res = df_res.sort_values(by="AI Prediction", ascending=False)
+            # 信頼度(Confidence)が高い順、かつ予測収益率が高い順にソート
+            df_res = df_res.sort_values(by=["Confidence", "AI Prediction"], ascending=[False, False])
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
             st.write(f"### 🎯 前回の分析結果 ({len(df_res)}件)")
@@ -437,7 +440,10 @@ with tab2:
             st.info("📋 **Ticker 一括コピー用 (上位50件)**")
             st.code(",".join(df_res['Ticker'].head(50).tolist()))
 
-            st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction"]].head(50).style.format({"AI Prediction": "{:.2%}"}))
+            st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].head(50).style.format({
+                "AI Prediction": "{:.2%}",
+                "Confidence": "{:.4f}"
+            }))
             
             # Ticker一括コピー機能の追加
             st.write("📋 **Ticker 一括コピー用 (上位50件)**")
