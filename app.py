@@ -56,10 +56,13 @@ def load_portfolio():
         try:
             df = pd.read_csv(PORTFOLIO_FILE)
             if not df.empty:
+                # 古いCSVに Currency 列がない場合は追加する
+                if 'Currency' not in df.columns:
+                    df['Currency'] = 'USD'
                 return df
         except Exception as e:
             print(f"Portfolio load error: {e}")
-    return pd.DataFrame(columns=["Ticker", "Buy Price", "Quantity"])
+    return pd.DataFrame(columns=["Ticker", "Buy Price", "Quantity", "Currency"])
 
 def save_portfolio(df):
     df.to_csv(PORTFOLIO_FILE, index=False)
