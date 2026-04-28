@@ -689,7 +689,8 @@ with tab3:
                 profit_pct = analysis['ProfitPct']
                 advice = analysis['Advice']
                 comp_name = analysis['Name']
-                currency = analysis['Currency']
+                # メモリ上の通貨情報を無視して、最新の判定を使う
+                # currency = analysis['Currency'] 
             else:
                 current_price = 0
                 profit_pct = 0
