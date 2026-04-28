@@ -626,8 +626,13 @@ with tab3:
                         data, _detected_currency = get_stock_data(ticker, period="2y")
                         data = prepare_features(data)
                         
-                        # ユーザー指定の通貨があれば優先
-                        currency = row.get('Currency', _detected_currency)
+                        # ユーザー指定の通貨があれば優先し、なければ形式から推測
+                        if 'Currency' in row and pd.notna(row['Currency']):
+                            currency = row['Currency']
+                        elif ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
+                            currency = "JPY"
+                        else:
+                            currency = _detected_currency
                         
                         strategy = AIStrategy(api_key=api_key)
                         score = strategy.train(data)
