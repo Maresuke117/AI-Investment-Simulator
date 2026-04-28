@@ -144,11 +144,12 @@ def run_mass_scan():
 
 def send_discord_summary(top_df):
     if not DISCORD_WEBHOOK_URL: return
-    msg = f"🌟 **【AI大規模巡回】おはようございます！本日の日米お宝銘柄** 🌟\n数千銘柄からテクニカルと精密AIで厳選した TOP {len(top_df)} です。\n\n"
+    msg = f"🌟 **【AI大規模巡回】本日のお宝銘柄レポート TOP {len(top_df)}** 🌟\n全米・全東証の銘柄からテクニカルと精密AIで厳選しました。\n\n"
     for i, (_, row) in enumerate(top_df.iterrows()):
         flag = "🇺🇸" if "." not in row['Ticker'] else "🇯🇵"
-        msg += f"{i+1}. {flag} {row['Name']} ({row['Ticker']}): **{row['AI Prediction']:.1%}** (信頼度: {row['Confidence']:.3f})\n"
-    msg += "\n🔍 詳細なチャート分析はアプリでチェック！"
+        # 企業名をメインに、ティッカーは補足として表示
+        msg += f"{i+1}. {flag} **{row['Name']}**: **{row['AI Prediction']:.1%}** (信頼度: {row['Confidence']:.3f})\n"
+    msg += "\n🔍 詳細チャートとAIアドバイスはアプリでチェック！"
     requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
 
 if __name__ == "__main__":
