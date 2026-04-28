@@ -599,14 +599,16 @@ with tab3:
         st.info("💡 日本株は銘柄コード（例: 7203）を入力すると円建て、米国株（例: AAPL）はドル建てとして扱われます。")
         with st.form("add_holding_form"):
             new_ticker = st.text_input("銘柄コード (例: 7203, NVDA)", help="日本株は4桁の数字、米国株はシンボルを入力してください")
-            new_price = st.number_input("取得単価", min_value=0.0, step=0.1, help="選択した通貨での単価を入力してください")
+            new_price = st.number_input("取得単価", min_value=0.0, step=0.1)
             new_currency = st.radio("通貨", options=["JPY", "USD"], horizontal=True)
             new_qty = st.number_input("数量", min_value=0, step=1)
             if st.form_submit_button("登録"):
+                # 既存の同名銘柄があれば削除して上書き
+                portfolio_df = portfolio_df[portfolio_df['Ticker'] != new_ticker]
                 new_row = pd.DataFrame([{"Ticker": new_ticker, "Buy Price": new_price, "Quantity": new_qty, "Currency": new_currency}])
                 portfolio_df = pd.concat([portfolio_df, new_row], ignore_index=True)
                 save_portfolio(portfolio_df)
-                st.success(f"{new_ticker} ({new_currency}) を登録しました！")
+                st.success(f"{new_ticker} ({new_currency}) を登録・更新しました！")
                 st.rerun()
 
     if not portfolio_df.empty:
@@ -626,14 +628,9 @@ with tab3:
                         data, _detected_currency = get_stock_data(ticker, period="2y")
                         data = prepare_features(data)
                         
-                        # 日本株形式（4桁数字や.T）なら、保存値を無視して強制的にJPYにする
-                        if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
-                            currency = "JPY"
-                        else:
-                            # それ以外は登録時の通貨設定を優先し、ない場合のみ推測
-                            currency = row.get('Currency')
-                            if pd.isna(currency):
-                                currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+                        # 登録時の通貨設定を絶対とし、それ以外は考慮しない
+                        currency = row.get('Currency', 'USD')
+
 
 
                         
@@ -671,14 +668,9 @@ with tab3:
         portfolio_results = []
         for index, row in portfolio_df.iterrows():
             ticker = str(row['Ticker'])
-            # 日本株形式（4桁数字や.T）なら、保存値を無視して強制的にJPYにする
-            if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
-                currency = "JPY"
-            else:
-                # 登録時の通貨設定を優先し、ない場合のみ推測
-                currency = row.get('Currency')
-                if pd.isna(currency):
-                    currency = "JPY" if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4) else "USD"
+            # 登録時の通貨設定を絶対とし、それ以外は考慮しない
+            currency = row.get('Currency', 'USD')
+
 
 
                 
