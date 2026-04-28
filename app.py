@@ -51,6 +51,10 @@ def save_settings(settings):
     with open(SETTINGS_FILE, "w") as f:
         json.dump(settings, f)
 
+@st.cache_data(ttl=3600) # 1時間キャッシュ
+def get_cached_stock_data(ticker, period="2y"):
+    return get_stock_data(ticker, period=period)
+
 def load_portfolio():
     if os.path.exists(PORTFOLIO_FILE):
         try:
@@ -624,20 +628,17 @@ with tab3:
         # 一括分析ボタン
         if st.button("🚀 全銘柄を一括AI分析", type="primary"):
             with st.status("Analyzing entire portfolio...", expanded=True) as status:
+                strategy = AIStrategy(api_key=api_key)
                 for index, row in portfolio_df.iterrows():
                     ticker = str(row['Ticker'])
                     status.write(f"Analyzing {ticker}...")
                     try:
-                        data, _detected_currency = get_stock_data(ticker, period="2y")
+                        # データ取得 (キャッシュ & 企業名対応)
+                        data, _detected_currency, comp_name = get_cached_stock_data(ticker, period="2y")
                         data = prepare_features(data)
                         
                         # 登録時の通貨設定を絶対とし、それ以外は考慮しない
                         currency = row.get('Currency', 'USD')
-
-
-
-                        
-                        strategy = AIStrategy(api_key=api_key)
                         score = strategy.train(data)
                         signals = strategy.predict_signals(data)
                         
@@ -647,12 +648,9 @@ with tab3:
                         advice, color_type = strategy.get_advice(current_price, row['Buy Price'], prediction)
                         profit_pct = (current_price / row['Buy Price'] - 1) * 100
                         
-                        # 企業名取得
-                        try:
-                            t_obj = Ticker(ticker)
-                            comp_name = t_obj.price.get(ticker, {}).get('shortName', ticker)
-                        except:
-                            comp_name = ticker
+                        # 以前はここで再度Tickerを叩いて名前を取っていたのを、データ取得時に含めるように変更
+                        # comp_name は get_cached_stock_data から取得済み
+
 
                         st.session_state.portfolio_analysis[ticker] = {
                             "Name": comp_name,

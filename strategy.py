@@ -41,13 +41,14 @@ def prepare_features(df):
 
 class AIStrategy:
     def __init__(self, api_key=None):
-        # XGBoostのハイパーパラメータ設定 (より精度の高い設定)
+        # XGBoostのハイパーパラメータ設定 (高速化と精度のバランス)
         self.model = xgb.XGBRegressor(
-            n_estimators=500,
-            learning_rate=0.01,
-            max_depth=6,
+            n_estimators=200, # 500から200に削減して高速化
+            learning_rate=0.05, # 学習率を少し上げて収束を早める
+            max_depth=5,
             subsample=0.8,
             colsample_bytree=0.8,
+            n_jobs=-1, # マルチスレッド化
             random_state=42
         )
         self.features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'Upper_BB', 'Lower_BB']

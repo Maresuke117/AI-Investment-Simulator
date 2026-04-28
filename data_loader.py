@@ -36,18 +36,20 @@ def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
     
     # 通貨情報の取得 (yahooquery)
     currency = "USD" # デフォルト
-    if ticker.endswith('.T'):
-        currency = "JPY"
-    else:
-        try:
-            # 複数のソースから通貨情報を探す
-            summary = t.summary_detail.get(ticker, {})
-            price_info = t.price.get(ticker, {})
-            currency = price_info.get('currency') or summary.get('currency') or "USD"
-        except:
-            currency = "USD"
+    name = ticker    # デフォルト
+    try:
+        # 複数のソースから通貨と銘柄情報を探す
+        summary = t.summary_detail.get(ticker, {})
+        price_info = t.price.get(ticker, {})
+        currency = price_info.get('currency') or summary.get('currency') or "USD"
+        name = price_info.get('shortName') or summary.get('shortName') or ticker
+    except:
+        pass
         
-    return df, currency
+    if ticker.endswith('.T') and currency == "USD":
+        currency = "JPY"
+        
+    return df, currency, name
 
 def search_ticker(query: str):
     """

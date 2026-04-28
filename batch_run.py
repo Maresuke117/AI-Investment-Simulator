@@ -42,7 +42,7 @@ def run_daily_batch():
         
         try:
             # 1. データ取得と特徴量生成
-            data, currency = get_stock_data(ticker, period="2y")
+            data, currency, name = get_stock_data(ticker, period="2y")
             data = prepare_features(data)
             
             # 2. XGBoost 予測
@@ -63,7 +63,8 @@ def run_daily_batch():
             t = Ticker(ticker)
             news = t.news
             s_score = "N/A"
-            if news:
+            # news がメソッドの場合はリストに変換を試みる、または None チェック
+            if news and not callable(news):
                 news_text = "\n".join([n.get('title', '') for n in news[:5]])
                 try:
                     import json
