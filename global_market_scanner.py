@@ -24,54 +24,48 @@ def get_all_target_tickers():
     """日米合計 約1,400銘柄 (US: Russell 1000相当 / JP: JPX日経400) を取得"""
     global NAME_CACHE
     
-    # 1. 米国株 (Russell 1000相当)
+    # 1. 米国株 (S&P 500 + 主要銘柄 = 約600-1,000)
     us_tickers = []
     try:
-        # 複数のソースを試行
-        urls = [
-            "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv",
-            "https://pkgstore.datahub.io/core/s-and-p-500-companies/constituents_csv/data/ac117143448e89b91e9f13e71618197e/constituents_csv.csv"
-        ]
-        for url in urls:
-            try:
-                res = requests.get(url, timeout=10)
-                if res.status_code == 200:
-                    df_us = pd.read_csv(io.StringIO(res.text))
-                    for _, row in df_us.iterrows():
-                        ticker = str(row['Symbol']).replace('.', '-')
-                        us_tickers.append(ticker)
-                        NAME_CACHE[ticker] = row['Name']
-                    if len(us_tickers) > 400: break
-            except: continue
+        # WikipediaからS&P 500を確実に取得
+        print("🔍 米国株リスト(Wikipedia)を取得中...")
+        url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+        res = requests.get(url_sp500, timeout=10)
+        dfs = pd.read_html(res.text)
+        df_us = dfs[0]
+        for _, row in df_us.iterrows():
+            ticker = str(row['Symbol']).replace('.', '-')
+            us_tickers.append(ticker)
+            NAME_CACHE[ticker] = row['Security']
             
-        # 主要追加銘柄 (Russell 1000上位の補完)
+        # 主要追加銘柄
         additional_us = {
             "TSLA": "Tesla, Inc.", "NVDA": "NVIDIA Corporation", "AMD": "Advanced Micro Devices, Inc.",
             "PLTR": "Palantir Technologies Inc.", "ARM": "Arm Holdings plc", "SMCI": "Super Micro Computer, Inc.",
-            "AVGO": "Broadcom Inc.", "ORCL": "Oracle Corporation", "COST": "Costco Wholesale Corporation"
+            "AVGO": "Broadcom Inc.", "ORCL": "Oracle Corporation", "COST": "Costco Wholesale Corporation",
+            "DELL": "Dell Technologies Inc.", "TEAM": "Atlassian Corporation", "WDAY": "Workday, Inc."
         }
         for t, n in additional_us.items():
             if t not in us_tickers:
                 us_tickers.append(t)
                 NAME_CACHE[t] = n
-        us_tickers = list(set(us_tickers))
         print(f"🇺🇸 米国株: {len(us_tickers)} 銘柄を取得。")
     except Exception as e:
-        print(f"⚠️ 米国株リスト取得エラー: {e}")
-        us_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
+        print(f"⚠️ 米国株取得エラー: {e}")
+        us_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "AMD", "NFLX", "AVGO"]
 
     # 2. 日本株 (JPX日経400限定)
     jp_tickers = []
     try:
+        print("🔍 JPX日経400リスト(CSV)を取得中...")
         url_jpx400 = "https://www.jpx.co.jp/markets/indices/jpx-nikkei400/tvdivq0000001vg2-att/jpxnk400_weight_j.csv"
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url_jpx400, headers=headers, timeout=10)
         
-        try:
-            df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='cp932')
-        except:
-            df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='utf-8-sig')
-            
+        # JPXのCSVは冒頭に不要な行があるため、スキップして読み込み
+        content = res.content.decode('cp932')
+        df_jpx400 = pd.read_csv(io.StringIO(content), skiprows=1) # 1行スキップ
+        
         code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col][0]
         name_col = [col for col in df_jpx400.columns if '銘柄名' in col or 'Name' in col][0]
         
@@ -86,10 +80,11 @@ def get_all_target_tickers():
                         
         print(f"🇯🇵 日本株 (JPX400): {len(jp_tickers)} 銘柄を取得。")
     except Exception as e:
-        print(f"⚠️ JPX400リスト取得エラー: {e}")
-        jp_tickers = ["7203.T", "6758.T", "6861.T"]
+        print(f"⚠️ JPX400取得エラー: {e}")
+        # フォールバック用の最小限リスト
+        jp_tickers = ["7203.T", "6758.T", "6861.T", "7974.T", "9984.T", "8306.T", "4063.T", "8035.T"]
 
-    return us_tickers, jp_tickers
+    return list(set(us_tickers)), list(set(jp_tickers))
 
 def stage1_screening(ticker):
     """Stage 1: 高速テクニカルスクリーニング (高品質銘柄用)"""
