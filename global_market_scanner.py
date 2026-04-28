@@ -21,17 +21,18 @@ RESULTS_FILE = "market_scan_results.csv"
 NAME_CACHE = {}
 
 def get_all_target_tickers():
-    """日米合計 約1,400銘柄 (US: Russell 1000相当 / JP: JPX日経400) を取得"""
+    """日米合計 約1,400銘柄 (US: S&P 500 / JP: JPX日経400) を取得"""
     global NAME_CACHE
+    headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
     
-    # 1. 米国株 (S&P 500 + 主要銘柄 = 約600-1,000)
+    # 1. 米国株 (S&P 500 = 約500件)
     us_tickers = []
     try:
-        # WikipediaからS&P 500を確実に取得
         print("🔍 米国株リスト(Wikipedia)を取得中...")
         url_sp500 = "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
-        res = requests.get(url_sp500, timeout=10)
-        dfs = pd.read_html(res.text)
+        res = requests.get(url_sp500, headers=headers, timeout=10)
+        # pd.read_htmlにhtml文字列を直接渡す
+        dfs = pd.read_html(io.StringIO(res.text))
         df_us = dfs[0]
         for _, row in df_us.iterrows():
             ticker = str(row['Symbol']).replace('.', '-')
@@ -42,43 +43,49 @@ def get_all_target_tickers():
         additional_us = {
             "TSLA": "Tesla, Inc.", "NVDA": "NVIDIA Corporation", "AMD": "Advanced Micro Devices, Inc.",
             "PLTR": "Palantir Technologies Inc.", "ARM": "Arm Holdings plc", "SMCI": "Super Micro Computer, Inc.",
-            "AVGO": "Broadcom Inc.", "ORCL": "Oracle Corporation", "COST": "Costco Wholesale Corporation",
-            "DELL": "Dell Technologies Inc.", "TEAM": "Atlassian Corporation", "WDAY": "Workday, Inc."
+            "AVGO": "Broadcom Inc.", "ORCL": "Oracle Corporation", "COST": "Costco Wholesale Corporation"
         }
         for t, n in additional_us.items():
             if t not in us_tickers:
                 us_tickers.append(t)
                 NAME_CACHE[t] = n
-        print(f"🇺🇸 米国株: {len(us_tickers)} 銘柄を取得。")
+        print(f"🇺🇸 米国株: {len(us_tickers)} 銘柄をロード完了。")
     except Exception as e:
         print(f"⚠️ 米国株取得エラー: {e}")
         us_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA", "AMD", "NFLX", "AVGO"]
 
-    # 2. 日本株 (JPX日経400限定)
+    # 2. 日本株 (JPX日経400 = 400件)
     jp_tickers = []
     try:
         print("🔍 JPX日経400リスト(CSV)を取得中...")
         url_jpx400 = "https://www.jpx.co.jp/markets/indices/jpx-nikkei400/tvdivq0000001vg2-att/jpxnk400_weight_j.csv"
-        headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url_jpx400, headers=headers, timeout=10)
         
-        # JPXのCSVは冒頭に不要な行があるため、スキップして読み込み
-        content = res.content.decode('cp932')
-        df_jpx400 = pd.read_csv(io.StringIO(content), skiprows=1) # 1行スキップ
-        
-        code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col][0]
-        name_col = [col for col in df_jpx400.columns if '銘柄名' in col or 'Name' in col][0]
-        
-        for _, row in df_jpx400.iterrows():
-            code = str(row[code_col])
-            name = str(row[name_col])
-            clean_code = "".join(filter(str.isdigit, code))[:4]
-            if len(clean_code) == 4:
-                ticker = f"{clean_code}.T"
-                jp_tickers.append(ticker)
-                NAME_CACHE[ticker] = name
-                        
-        print(f"🇯🇵 日本株 (JPX400): {len(jp_tickers)} 銘柄を取得。")
+        # エンコーディングの試行
+        content = ""
+        for enc in ['cp932', 'utf-8-sig', 'shift_jis']:
+            try:
+                content = res.content.decode(enc)
+                if "コード" in content: break
+            except: continue
+            
+        if content:
+            df_jpx400 = pd.read_csv(io.StringIO(content), skiprows=1)
+            code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col][0]
+            name_col = [col for col in df_jpx400.columns if '銘柄名' in col or 'Name' in col][0]
+            
+            for _, row in df_jpx400.iterrows():
+                code = str(row[code_col])
+                name = str(row[name_col])
+                clean_code = "".join(filter(str.isdigit, code))[:4]
+                if len(clean_code) == 4:
+                    ticker = f"{clean_code}.T"
+                    jp_tickers.append(ticker)
+                    NAME_CACHE[ticker] = name
+            print(f"🇯🇵 日本株 (JPX400): {len(jp_tickers)} 銘柄をロード完了。")
+        else:
+            raise ValueError("デコードに失敗しました")
+            
     except Exception as e:
         print(f"⚠️ JPX400取得エラー: {e}")
         # フォールバック用の最小限リスト
