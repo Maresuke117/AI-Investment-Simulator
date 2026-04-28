@@ -340,7 +340,7 @@ with tab2:
                 # --- 第一優先セクション ---
                 st.markdown("### 🎯 優先度1: AI Recommended (上昇予測 ＆ 信頼度プラス)")
                 if not df_tier1.empty:
-                    st.info(f"📋 **第一優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
+                    st.success(f"📋 **最優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
                     st.code(",".join(df_tier1['Ticker'].tolist()))
                     st.table(df_tier1[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                         "AI Prediction": "{:.2%}",
@@ -350,9 +350,9 @@ with tab2:
                     st.warning("優先度1の条件を満たす銘柄はありません。")
                 
                 # --- 第二優先セクション ---
-                st.markdown("### 🟢 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
+                st.markdown("### 📈 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
                 if not df_tier2.empty:
-                    st.info(f"📋 **第二優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
+                    st.info(f"📋 **準優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
                     st.code(",".join(df_tier2['Ticker'].tolist()))
                     st.table(df_tier2[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                         "AI Prediction": "{:.2%}",
@@ -361,16 +361,16 @@ with tab2:
                 else:
                     st.warning("優先度2の条件を満たす銘柄はありません。")
                 
-                # --- 別枠セクション (折りたたみ) ---
-                with st.expander("⚠️ 優先度3: 参考 (上昇予測だが信頼度 -1.0未満)"):
-                    st.write("AIは上昇を予測していますが、モデルの信頼度が極めて低いため注意が必要です。")
-                    if not df_tier3.empty:
-                        st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
-                            "AI Prediction": "{:.2%}",
-                            "Confidence": "{:.4f}"
-                        }))
-                    else:
-                        st.write("該当なし")
+                # --- 第三優先セクション ---
+                st.markdown("### ⚠️ 優先度3: Speculative (上昇予測だが信頼度 -1.0未満)")
+                if not df_tier3.empty:
+                    st.write("AIは上昇を予測していますが、モデルの信頼度が低いため注意が必要です。")
+                    st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                        "AI Prediction": "{:.2%}",
+                        "Confidence": "{:.4f}"
+                    }))
+                else:
+                    st.write("該当なし")
                 
                 # 自動スキャンの上位5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
@@ -482,7 +482,7 @@ with tab2:
             try:
                 target_t = t_input
                 if target_t.isdigit() and len(target_t) == 4: target_t += ".T"
-                data, currency = get_stock_data(target_t, period=period)
+                data, currency, name = get_stock_data(target_t, period=period)
                 data = prepare_features(data)
                 if len(data) < 50: return None
                 
@@ -493,10 +493,14 @@ with tab2:
                 avg_pred = signals['Prediction'].tail(5).mean()
                 annualized_pred = avg_pred * 252
                 
-                try:
-                    name = yf.Ticker(target_t).info.get('shortName', target_t)
-                except:
-                    name = target_t
+                return {
+                    "Name": name,
+                    "Ticker": target_t,
+                    "Price": signals['Close'].iloc[-1],
+                    "Currency": currency,
+                    "AI Prediction": annualized_pred,
+                    "Confidence": strategy.train(data)
+                }
 
                 return {
                     "Name": name,
@@ -556,7 +560,7 @@ with tab2:
             # --- 第一優先セクション ---
             st.markdown("#### 🌟 優先度1: AI Recommended (上昇予測 ＆ 信頼度プラス)")
             if not df_tier1.empty:
-                st.info(f"📋 **第一優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
+                st.success(f"📋 **最優先銘柄 Ticker 一括コピー ({len(df_tier1)}件)**")
                 st.code(",".join(df_tier1['Ticker'].tolist()))
                 st.table(df_tier1[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                     "AI Prediction": "{:.2%}",
@@ -566,9 +570,9 @@ with tab2:
                 st.warning("優先度1の条件を満たす銘柄はありませんでした。")
                 
             # --- 第二優先セクション ---
-            st.markdown("#### 🟢 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
+            st.markdown("#### 📈 優先度2: Potential (上昇予測 ＆ 信頼度 0〜-1.0)")
             if not df_tier2.empty:
-                st.info(f"📋 **第二優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
+                st.info(f"📋 **準優先銘柄 Ticker 一括コピー ({len(df_tier2)}件)**")
                 st.code(",".join(df_tier2['Ticker'].tolist()))
                 st.table(df_tier2[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
                     "AI Prediction": "{:.2%}",
@@ -577,15 +581,15 @@ with tab2:
             else:
                 st.warning("優先度2の条件を満たす銘柄はありませんでした。")
             
-            # --- 別枠セクション ---
-            with st.expander("⚠️ 優先度3: 参考 (上昇予測だが信頼度 -1.0未満)"):
-                if not df_tier3.empty:
-                    st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
-                        "AI Prediction": "{:.2%}",
-                        "Confidence": "{:.4f}"
-                    }))
-                else:
-                    st.write("該当なし")
+            # --- 第三優先セクション ---
+            st.markdown("#### ⚠️ 優先度3: Speculative (上昇予測だが信頼度 -1.0未満)")
+            if not df_tier3.empty:
+                st.table(df_tier3[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                    "AI Prediction": "{:.2%}",
+                    "Confidence": "{:.4f}"
+                }))
+            else:
+                st.write("該当なし")
             
             # Ticker一括コピー機能の追加
             st.write("📋 **Ticker 一括コピー用 (上位50件)**")

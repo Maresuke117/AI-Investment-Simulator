@@ -73,19 +73,35 @@ def get_all_target_tickers():
     return us_tickers, jp_tickers
 
 def stage1_screening(ticker):
-    """Stage 1: 超高速スクリーニング"""
+    """Stage 1: 高速テクニカルスクリーニング (質の高い銘柄を優先)"""
     try:
-        # 極小期間で存在確認と基本指標チェック
+        # 存在確認と基本指標チェック
         data, _, name = get_stock_data(ticker, period="3mo")
-        if len(data) < 20: return None
+        if len(data) < 40: return None
         
-        # 簡易的な勢いチェック (20日線より上)
         data = prepare_features(data)
         latest = data.iloc[-1]
         
+        # 1. 勢いチェック
         score = 0
         if latest['Close'] > latest['SMA_20']: score += 1
-        if 30 < latest['RSI'] < 70: score += 1
+        if 40 < latest['RSI'] < 65: score += 1 # 加熱しすぎない銘柄を好む
+        
+        # 2. 予測しやすさ (ボラティリティ) チェック
+        # 直近20日のボラティリティを計算
+        vol = data['Close'].pct_change().tail(20).std()
+        if vol < 0.03: # 1日の変動が激しすぎない (3%以内目安)
+            score += 2  # 予測しやすい素直な銘柄を加点
+        elif vol > 0.06:
+            score -= 2  # ギャンブル銘柄は減点 (AIが苦手)
+            
+        # 3. トレンドの継続性
+        # 移動平均の並び (SMA20 > SMA50)
+        if latest['SMA_20'] > latest['SMA_50']:
+            score += 1
+            
+        # スコアが一定以下のものはこの時点で切り捨て
+        if score < 1: return None
         
         return {"Ticker": ticker, "ScreeningScore": score, "Name": name}
     except: return None
@@ -177,13 +193,42 @@ def run_mass_scan():
     except Exception as e:
         print(f"❌ 集計中にエラーが発生しました: {e}")
 
-def send_discord_summary(top_df):
-    if not DISCORD_WEBHOOK_URL: return
-    msg = f"🔥 **【究極巡回】日米4,000銘柄から厳選されたお宝レポート** 🔥\n市場の端から端までパトロールし、AIが数学的に推奨する銘柄です。\n\n"
-    for i, (_, row) in enumerate(top_df.iterrows()):
-        flag = "🇺🇸" if "." not in row['Ticker'] else "🇯🇵"
-        msg += f"{i+1}. {flag} {row['Name']} ({row['Ticker']}): **{row['AI Prediction']:.1%}** (信頼度: {row['Confidence']:.3f})\n"
-    msg += "\n🔍 詳細な戦略はダッシュボードで確認してください！"
+def send_discord_summary(df):
+    if not DISCORD_WEBHOOK_URL or df.empty: return
+    
+    # 優先順位分け
+    tier1 = df[(df['Confidence'] > 0) & (df['AI Prediction'] > 0)].head(10)
+    tier2 = df[(df['Confidence'] <= 0) & (df['Confidence'] > -1) & (df['AI Prediction'] > 0)].head(10)
+    tier3 = df[(df['Confidence'] <= -1) & (df['AI Prediction'] > 0)].head(5)
+    
+    msg = "🔥 **【日米4,000銘柄】AI厳選・投資チャンスレポート** 🔥\n\n"
+    
+    if not tier1.empty:
+        msg += "🎯 **【最優先】AI推奨 (上昇予測 ＆ 信頼度プラス)**\n"
+        for i, (_, row) in enumerate(tier1.iterrows()):
+            flag = "🇺🇸" if "." not in row['Ticker'] else "🇯🇵"
+            msg += f"{i+1}. {flag} **{row['Name']}** ({row['Ticker']}): +{row['AI Prediction']:.1%} (信頼度: {row['Confidence']:.3f})\n"
+        msg += "\n"
+        
+    if not tier2.empty:
+        msg += "📈 **【準優先】Potential (上昇予測 ＆ 信頼度中)**\n"
+        for i, (_, row) in enumerate(tier2.iterrows()):
+            flag = "🇺🇸" if "." not in row['Ticker'] else "🇯🇵"
+            msg += f"{i+1}. {flag} **{row['Name']}** ({row['Ticker']}): +{row['AI Prediction']:.1%} (信頼度: {row['Confidence']:.3f})\n"
+        msg += "\n"
+
+    if not tier3.empty:
+        msg += "⚠️ **【参考】Speculative (上昇予測だが信頼度低)**\n"
+        for i, (_, row) in enumerate(tier3.iterrows()):
+            flag = "🇺🇸" if "." not in row['Ticker'] else "🇯🇵"
+            msg += f"{i+1}. {flag} **{row['Name']}** ({row['Ticker']})\n"
+            
+    msg += "\n🔍 詳細な分析はアプリをチェックしてください！"
+    
+    # メッセージが長すぎる場合は分割 (Discord 2000文字制限)
+    if len(msg) > 1900:
+        msg = msg[:1900] + "\n...(以下略)"
+        
     requests.post(DISCORD_WEBHOOK_URL, json={"content": msg})
 
 if __name__ == "__main__":
