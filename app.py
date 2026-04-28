@@ -263,9 +263,9 @@ with tab2:
                 st.info("📋 **Ticker 一括コピー用 (上位20件)**")
                 st.code(",".join(df_auto['Ticker'].head(20).tolist()))
                 
-                # スコア計算: Confidence > 0 の場合のみ (AI Prediction * Confidence)
-                # Confidence <= 0 のものは最下位へ
-                df_auto['Score'] = np.where(df_auto['Confidence'] > 0, df_auto['AI Prediction'] * df_auto['Confidence'], -9999)
+                # スコア計算: (Confidence > 0) かつ (AI Prediction > 0) の場合のみ (AI Prediction * Confidence)
+                # それ以外のものは最下位へ (投資対象外)
+                df_auto['Score'] = np.where((df_auto['Confidence'] > 0) & (df_auto['AI Prediction'] > 0), df_auto['AI Prediction'] * df_auto['Confidence'], -9999)
                 df_auto = df_auto.sort_values(by="Score", ascending=False)
                 
                 st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].head(20).style.format({
@@ -431,8 +431,8 @@ with tab2:
     if os.path.exists(CUSTOM_RESULTS_FILE):
         try:
             df_res = pd.read_csv(CUSTOM_RESULTS_FILE)
-            # スコア計算: Confidence > 0 の場合のみ (AI Prediction * Confidence)
-            df_res['Score'] = np.where(df_res['Confidence'] > 0, df_res['AI Prediction'] * df_res['Confidence'], -9999)
+            # スコア計算: (Confidence > 0) かつ (AI Prediction > 0) の場合のみ (AI Prediction * Confidence)
+            df_res['Score'] = np.where((df_res['Confidence'] > 0) & (df_res['AI Prediction'] > 0), df_res['AI Prediction'] * df_res['Confidence'], -9999)
             df_res = df_res.sort_values(by="Score", ascending=False)
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
