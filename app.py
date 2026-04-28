@@ -689,13 +689,13 @@ with tab3:
             currency_symbol = "¥" if display_currency == "JPY" else "$"
             
             portfolio_results.append({
-                "Name": comp_name,
-                "Ticker": ticker,
-                "Qty": row['Quantity'],
-                f"Buy Price ({display_currency})": f"{currency_symbol}{disp_buy:,.1f}",
-                f"Current ({display_currency})": f"{currency_symbol}{disp_curr:,.1f}",
-                "Profit/Loss": f"{profit_pct:+.2f}%" if analysis else "---",
-                "AI Advice": advice
+                "銘柄名": comp_name,
+                "コード": ticker,
+                "数量": row['Quantity'],
+                f"買値 ({display_currency})": f"{currency_symbol}{disp_buy:,.1f}",
+                f"現在値 ({display_currency})": f"{currency_symbol}{disp_curr:,.1f}",
+                "損益": f"{profit_pct:+.2f}%" if analysis else "---",
+                "AIアドバイス": advice
             })
         
         # テーブル表示
@@ -709,8 +709,9 @@ with tab3:
             with st.expander(f"🔍 {ticker} の詳細管理"):
                 col1, col2 = st.columns([3, 1])
                 with col1:
+                    st.write(f"**銘柄名:** {comp_name}")
+                    st.write(f"**取得単価:** {currency_symbol}{disp_buy:,.1f} ({display_currency})")
                     if analysis:
-                        st.write(f"**銘柄名:** {analysis['Name']}")
                         # 詳細AIレポート
                         if st.button(f"📖 {ticker} の詳細AIレポートを生成", key=f"rpt_{ticker}"):
                             with st.spinner("AI Analyzing..."):
