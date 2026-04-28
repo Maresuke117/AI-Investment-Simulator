@@ -1,4 +1,4 @@
-import yfinance as yf
+from yahooquery import Ticker
 import pandas as pd
 import numpy as np
 from strategy import AIStrategy, prepare_features
@@ -51,7 +51,9 @@ def process_single_stock(ticker):
         avg_pred = signals['Prediction'].tail(5).mean()
         annualized_pred = avg_pred * 252
         try:
-            name = yf.Ticker(ticker).info.get('shortName', ticker)
+            # yahooqueryを使用して銘柄名を取得
+            t = Ticker(ticker)
+            name = t.price.get(ticker, {}).get('shortName', ticker)
         except:
             name = ticker
         return {

@@ -1,5 +1,6 @@
-import yfinance as yf
+from yahooquery import Ticker, search as yq_search
 import pandas as pd
+import numpy as np
 
 def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
     """
@@ -10,15 +11,37 @@ def get_stock_data(ticker: str, period: str = "2y", interval: str = "1d"):
     if ticker.isdigit() and len(ticker) == 4:
         ticker += ".T"
         
-    print(f"Fetching data for {ticker}...")
-    stock = yf.Ticker(ticker)
-    df = stock.history(period=period, interval=interval)
+    print(f"Fetching data for {ticker} using yahooquery...")
+    t = Ticker(ticker)
+    df = t.history(period=period, interval=interval)
     
-    if df.empty:
+    if isinstance(df, dict) or df is None or (hasattr(df, 'empty') and df.empty):
         raise ValueError(f"Ticker '{ticker}' のデータが見つかりませんでした。")
         
+    # yahooqueryの出力形式を調整 (マルチインデックスの解除とカラム名の正規化)
+    if isinstance(df.index, pd.MultiIndex):
+        df = df.reset_index().set_index('date')
+    elif 'date' in df.columns:
+        df = df.set_index('date')
+        
+    # カラム名を大文字開始に統一 (yfinance 互換)
+    rename_map = {
+        'open': 'Open', 'high': 'High', 'low': 'Low', 
+        'close': 'Close', 'volume': 'Volume', 'adjclose': 'Adj Close'
+    }
+    df = df.rename(columns=rename_map)
+    
+    # 型変換とインデックス調整
     df.index = pd.to_datetime(df.index).tz_localize(None)
-    return df, stock.info.get('currency', 'USD')
+    
+    # 通貨情報の取得 (yahooquery)
+    try:
+        summary = t.summary_detail.get(ticker, {})
+        currency = summary.get('currency', 'USD')
+    except:
+        currency = 'USD'
+        
+    return df, currency
 
 def search_ticker(query: str):
     """
@@ -26,29 +49,25 @@ def search_ticker(query: str):
     """
     try:
         print(f"Searching for: {query}")
-        # yfinanceのSearch機能を使用
-        # 日本語の場合は、内部的に一度検索を試みる
-        search = yf.Search(query, max_results=10)
-        results = search.quotes
+        results = yq_search(query)
+        quotes = results.get('quotes', [])
         
-        if not results:
+        if not quotes:
             return None
             
-        # 候補の中から最適なものを選択
         # 1. 日本株 (.T) を最優先
-        for res in results:
+        for res in quotes:
             symbol = res.get('symbol', '')
             if symbol.endswith('.T'):
                 return symbol
         
-        # 2. 米国株（アルファベットのみのシンボル）を次点
-        for res in results:
+        # 2. 米国株
+        for res in quotes:
             symbol = res.get('symbol', '')
-            if symbol.isalpha():
+            if symbol.isalpha() and not symbol.isdigit():
                 return symbol
                 
-        # 3. それ以外（指数など）
-        return results[0].get('symbol')
+        return quotes[0].get('symbol')
         
     except Exception as e:
         print(f"Search error for '{query}': {e}")

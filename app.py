@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
-import yfinance as yf
+from yahooquery import Ticker
 from data_loader import get_stock_data, search_ticker
 from strategy import AIStrategy, prepare_features
 from dotenv import load_dotenv
@@ -68,8 +68,13 @@ def save_portfolio(df):
 def get_exchange_rate():
     """USD/JPYの為替レートを取得"""
     try:
-        data = yf.Ticker("USDJPY=X").history(period="1d")
-        return data['Close'].iloc[-1]
+        t = Ticker("USDJPY=X")
+        data = t.history(period="1d")
+        if 'close' in data.columns:
+            return data['close'].iloc[-1]
+        elif 'Close' in data.columns:
+            return data['Close'].iloc[-1]
+        return 150.0
     except:
         return 150.0 # 取得失敗時のデフォルト
 
