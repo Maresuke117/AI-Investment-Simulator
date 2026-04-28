@@ -534,11 +534,11 @@ with tab2:
                         with st.spinner(f"Generating strategy for {ticker}..."):
                             try:
                                 # ニュースを取得してセンチメントを計算
-                                stock = yf.Ticker(ticker)
-                                news = stock.news
+                                t_obj = Ticker(ticker)
+                                news = t_obj.news
                                 s_score = 0
-                                if news:
-                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                if news and isinstance(news, list):
+                                    news_text = "\n".join([n.get('title', '') for n in news[:5]])
                                     try:
                                         import json
                                         raw_s = report_strategy.get_sentiment(ticker, news_text)
@@ -650,8 +650,8 @@ with tab3:
                 
                 # 企業名を取得
                 try:
-                    stock_info = yf.Ticker(row['Ticker']).info
-                    comp_name = stock_info.get('shortName', row['Ticker'])
+                    t_obj = Ticker(row['Ticker'])
+                    comp_name = t_obj.price.get(row['Ticker'], {}).get('shortName', row['Ticker'])
                 except:
                     comp_name = row['Ticker']
 
@@ -680,11 +680,11 @@ with tab3:
                         with st.spinner(f"AI Analyzing {row['Ticker']}..."):
                             try:
                                 # ニュース取得とセンチメント
-                                stock = yf.Ticker(row['Ticker'])
-                                news = stock.news
+                                t_obj = Ticker(row['Ticker'])
+                                news = t_obj.news
                                 s_score = 0
-                                if news:
-                                    news_text = "\n".join([n.get('content', {}).get('title', '') for n in news[:5]])
+                                if news and isinstance(news, list):
+                                    news_text = "\n".join([n.get('title', '') for n in news[:5]])
                                     try:
                                         import json
                                         raw_s = strategy.get_sentiment(row['Ticker'], news_text)
