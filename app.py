@@ -259,19 +259,38 @@ with tab2:
                 # 通貨記号の付与
                 df_auto['Price_Display'] = df_auto.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
                 
-                # Ticker一括コピー機能 (テーブルの上にも配置)
-                st.info("📋 **Ticker 一括コピー用 (上位20件)**")
-                st.code(",".join(df_auto['Ticker'].head(20).tolist()))
+                # データの分類
+                # 推奨: 信頼度 > 0 かつ 予測 > 0
+                df_rec = df_auto[(df_auto['Confidence'] > 0) & (df_auto['AI Prediction'] > 0)].copy()
+                df_rec['Score'] = df_rec['AI Prediction'] * df_rec['Confidence']
+                df_rec = df_rec.sort_values(by="Score", ascending=False)
                 
-                # スコア計算: (Confidence > 0) かつ (AI Prediction > 0) の場合のみ (AI Prediction * Confidence)
-                # それ以外のものは最下位へ (投資対象外)
-                df_auto['Score'] = np.where((df_auto['Confidence'] > 0) & (df_auto['AI Prediction'] > 0), df_auto['AI Prediction'] * df_auto['Confidence'], -9999)
-                df_auto = df_auto.sort_values(by="Score", ascending=False)
+                # その他: それ以外
+                df_other = df_auto[~df_auto.index.isin(df_rec.index)].copy()
+                df_other = df_other.sort_values(by="Confidence", ascending=False)
                 
-                st.table(df_auto[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].head(20).style.format({
-                    "AI Prediction": "{:.2%}",
-                    "Confidence": "{:.4f}"
-                }))
+                # --- 推奨銘柄の表示 ---
+                st.markdown("### 🎯 AI Recommended (高信頼 ＆ 上昇予測)")
+                if not df_rec.empty:
+                    st.info(f"📋 **推奨銘柄 Ticker 一括コピー ({len(df_rec)}件)**")
+                    st.code(",".join(df_rec['Ticker'].tolist()))
+                    st.table(df_rec[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                        "AI Prediction": "{:.2%}",
+                        "Confidence": "{:.4f}"
+                    }))
+                else:
+                    st.warning("現在、推奨条件を満たす銘柄はありません。")
+                
+                # --- その他の表示 (折りたたみ) ---
+                with st.expander("⚠️ 参考：その他のスキャン結果 (信頼度低・下落予測など)"):
+                    st.write("信頼度がマイナス、または下落が予測されている銘柄です。")
+                    if not df_other.empty:
+                        st.table(df_other[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                            "AI Prediction": "{:.2%}",
+                            "Confidence": "{:.4f}"
+                        }))
+                    else:
+                        st.write("該当なし")
                 
                 # 自動スキャンの上位5件に対して詳細な投資戦略を生成
                 st.subheader("💡 AI Recommended Investment Strategy (Top 5)")
@@ -431,23 +450,37 @@ with tab2:
     if os.path.exists(CUSTOM_RESULTS_FILE):
         try:
             df_res = pd.read_csv(CUSTOM_RESULTS_FILE)
-            # スコア計算: (Confidence > 0) かつ (AI Prediction > 0) の場合のみ (AI Prediction * Confidence)
-            df_res['Score'] = np.where((df_res['Confidence'] > 0) & (df_res['AI Prediction'] > 0), df_res['AI Prediction'] * df_res['Confidence'], -9999)
-            df_res = df_res.sort_values(by="Score", ascending=False)
             df_res['Price_Display'] = df_res.apply(lambda x: f"{'¥' if x['Currency']=='JPY' else '$'}{x['Price']:,.1f}", axis=1)
             
-            st.write(f"### 🎯 前回の分析結果 ({len(df_res)}件)")
-            with st.expander("ℹ️ AI Prediction (Annual) の読み方について"):
-                st.info("AI（XGBoost）が直近の株価推移から算出した予想年率収益率です。")
+            # データの分類
+            df_rec = df_res[(df_res['Confidence'] > 0) & (df_res['AI Prediction'] > 0)].copy()
+            df_rec['Score'] = df_rec['AI Prediction'] * df_rec['Confidence']
+            df_rec = df_rec.sort_values(by="Score", ascending=False)
+            
+            df_other = df_res[~df_res.index.isin(df_rec.index)].copy()
+            df_other = df_other.sort_values(by="Confidence", ascending=False)
 
-            # Ticker一括コピー機能 (テーブルの上にも配置)
-            st.info("📋 **Ticker 一括コピー用 (上位50件)**")
-            st.code(",".join(df_res['Ticker'].head(50).tolist()))
-
-            st.table(df_res[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].head(50).style.format({
-                "AI Prediction": "{:.2%}",
-                "Confidence": "{:.4f}"
-            }))
+            st.write(f"### 🎯 分析結果 ({len(df_res)}件)")
+            
+            # --- 推奨銘柄 ---
+            st.markdown("#### 🌟 AI Recommended (高信頼 ＆ 上昇予測)")
+            if not df_rec.empty:
+                st.info(f"📋 **推奨銘柄 Ticker 一括コピー ({len(df_rec)}件)**")
+                st.code(",".join(df_rec['Ticker'].tolist()))
+                st.table(df_rec[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                    "AI Prediction": "{:.2%}",
+                    "Confidence": "{:.4f}"
+                }))
+            else:
+                st.warning("推奨条件を満たす銘柄はありませんでした。")
+            
+            # --- その他 ---
+            with st.expander("⚠️ 参考：その他のスキャン結果 (信頼度低・下落予測など)"):
+                if not df_other.empty:
+                    st.table(df_other[["Name", "Ticker", "Price_Display", "AI Prediction", "Confidence"]].style.format({
+                        "AI Prediction": "{:.2%}",
+                        "Confidence": "{:.4f}"
+                    }))
             
             # Ticker一括コピー機能の追加
             st.write("📋 **Ticker 一括コピー用 (上位50件)**")
