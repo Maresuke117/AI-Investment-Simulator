@@ -89,8 +89,22 @@ display_currency = st.sidebar.selectbox("Display Currency (表示通貨)", optio
 # 為替レートの表示
 st.sidebar.metric("Current USD/JPY", f"¥{usdjpy:.2f}")
 
-default_api_key = os.getenv("GEMINI_API_KEY", "")
-api_key = st.sidebar.text_input("Gemini API Key", value=default_api_key, type="password")
+# AI Engine Settings
+st.sidebar.markdown("---")
+st.sidebar.subheader("🤖 AI Settings")
+
+azure_key = os.getenv("AZURE_OPENAI_API_KEY")
+azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+
+if azure_key and azure_endpoint and azure_deployment:
+    st.sidebar.success(f"✅ Azure OpenAI Active\n({azure_deployment})")
+    api_key = None
+else:
+    default_api_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = st.sidebar.text_input("Gemini API Key", value=default_api_key, type="password")
+    if not api_key:
+        st.sidebar.info("💡 Azure OpenAI未設定のためGeminiキーが必要です")
 
 # 投資予算設定
 st.sidebar.markdown("---")

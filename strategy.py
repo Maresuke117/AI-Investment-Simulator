@@ -4,6 +4,8 @@ from sklearn.model_selection import train_test_split
 
 import xgboost as xgb
 import google.generativeai as genai
+from openai import AzureOpenAI
+import os
 from stable_baselines3 import PPO
 from rl_env import TradingEnv
 
@@ -50,23 +52,41 @@ class AIStrategy:
         )
         self.features = ['Open', 'High', 'Low', 'Close', 'Volume', 'SMA_20', 'SMA_50', 'RSI', 'Upper_BB', 'Lower_BB']
         
-        if api_key:
+        # LLM初期化 (Azure OpenAIを優先)
+        self.llm = None
+        self.llm_type = None
+        
+        azure_key = os.getenv("AZURE_OPENAI_API_KEY")
+        azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
+        azure_deployment = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        azure_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-05-01-preview")
+
+        if azure_key and azure_endpoint and azure_deployment:
+            try:
+                self.llm = AzureOpenAI(
+                    api_key=azure_key,
+                    api_version=azure_version,
+                    azure_endpoint=azure_endpoint
+                )
+                self.llm_type = "azure"
+                self.deployment_name = azure_deployment
+                print(f"Using Azure OpenAI: {azure_deployment}")
+            except Exception as e:
+                print(f"Azure OpenAI Setup Error: {e}")
+        
+        if not self.llm and api_key:
             try:
                 genai.configure(api_key=api_key)
-                # 利用可能なモデルをリストアップして、最適なものを探す
                 models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                # 'gemini-1.5-flash' を最優先（無料枠が大きく安定しているため）
                 selected_model = 'models/gemini-1.5-flash'
                 if not any('gemini-1.5-flash' in m for m in models):
                     selected_model = models[0] if models else 'gemini-pro'
                 
                 print(f"Using Gemini Model: {selected_model}")
                 self.llm = genai.GenerativeModel(selected_model)
+                self.llm_type = "gemini"
             except Exception as e:
-                print(f"LLM Setup Error: {e}")
-                self.llm = None
-        else:
-            self.llm = None
+                print(f"Gemini Setup Error: {e}")
 
     def train(self, df):
         """
@@ -131,11 +151,18 @@ class AIStrategy:
         {news_text}
         """
         try:
-            response = self.llm.generate_content(prompt)
-            # 解析ロジック (簡易化)
-            return response.text
+            if self.llm_type == "azure":
+                response = self.llm.chat.completions.create(
+                    model=self.deployment_name,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
+            elif self.llm_type == "gemini":
+                response = self.llm.generate_content(prompt)
+                return response.text
+            return "LLM is not configured."
         except Exception as e:
-            return 0, f"Error: {e}"
+            return f"Error: {e}"
 
     def get_advice(self, current_price, buy_price, prediction):
         """
@@ -256,8 +283,16 @@ class AIStrategy:
         日本語で、プロフェッショナルかつ分かりやすく回答してください。
         """
         try:
-            response = self.llm.generate_content(prompt)
-            return response.text
+            if self.llm_type == "azure":
+                response = self.llm.chat.completions.create(
+                    model=self.deployment_name,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return response.choices[0].message.content
+            elif self.llm_type == "gemini":
+                response = self.llm.generate_content(prompt)
+                return response.text
+            return "LLM is not configured."
         except Exception as e:
             return f"Advice generation error: {e}"
 
