@@ -620,7 +620,7 @@ with tab3:
         if st.button("🚀 全銘柄を一括AI分析", type="primary"):
             with st.status("Analyzing entire portfolio...", expanded=True) as status:
                 for index, row in portfolio_df.iterrows():
-                    ticker = row['Ticker']
+                    ticker = str(row['Ticker'])
                     status.write(f"Analyzing {ticker}...")
                     try:
                         data, _detected_currency = get_stock_data(ticker, period="2y")
@@ -670,7 +670,7 @@ with tab3:
         # 保有銘柄ごとに表示
         portfolio_results = []
         for index, row in portfolio_df.iterrows():
-            ticker = row['Ticker']
+            ticker = str(row['Ticker'])
             # 日本株形式（4桁数字や.T）なら、保存値を無視して強制的にJPYにする
             if ticker.endswith('.T') or (ticker.isdigit() and len(ticker) == 4):
                 currency = "JPY"
