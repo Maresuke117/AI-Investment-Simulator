@@ -17,31 +17,37 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
 RESULTS_FILE = "market_scan_results.csv"
 
+# --- キャッシュ ---
+NAME_CACHE = {}
+
 def get_all_target_tickers():
     """日米合計 約1,400銘柄 (US: Russell 1000相当 / JP: JPX日経400) を取得"""
+    global NAME_CACHE
     
-    # 1. 米国株 (Russell 1000相当 - 主要1,000銘柄)
+    # 1. 米国株 (Russell 1000相当)
     us_tickers = []
     try:
         url = "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/master/data/constituents.csv"
         res = requests.get(url)
         df_us = pd.read_csv(io.StringIO(res.text))
-        us_tickers = [t.replace('.', '-') for t in df_us['Symbol'].tolist()]
-        
-        # 主要追加銘柄 (NASDAQ/Russell 1000上位)
-        additional_us = [
-            "TSLA", "NVDA", "AMD", "PLTR", "SNOW", "SHOP", "SQ", "PYPL", "UBER", "ABNB",
-            "COIN", "MSTR", "DKNG", "HOOD", "RIVN", "LCID", "SOFI", "AFRM", "UPST", "AI",
-            "PINS", "SNAP", "ZM", "DOCU", "OKTA", "CRWD", "DDOG", "NET", "ZS", "U",
-            "ARM", "SMCI", "T", "VZ", "DIS", "IBM", "INTC", "QCOM", "TXN", "MU",
-            "DELL", "MDB", "TEAM", "WDAY", "ADSK", "ANET", "PANW", "FTNT", "SNPS", "CDNS"
-        ]
-        us_tickers.extend(additional_us)
+        for _, row in df_us.iterrows():
+            ticker = row['Symbol'].replace('.', '-')
+            us_tickers.append(ticker)
+            NAME_CACHE[ticker] = row['Name']
+            
+        # 主要追加銘柄
+        additional_us = {
+            "TSLA": "Tesla, Inc.", "NVDA": "NVIDIA Corporation", "AMD": "Advanced Micro Devices, Inc.",
+            "PLTR": "Palantir Technologies Inc.", "ARM": "Arm Holdings plc", "SMCI": "Super Micro Computer, Inc."
+        }
+        for t, n in additional_us.items():
+            us_tickers.append(t)
+            NAME_CACHE[t] = n
         us_tickers = list(set(us_tickers))
     except:
         us_tickers = ["AAPL", "MSFT", "GOOGL", "AMZN", "META", "TSLA", "NVDA"]
 
-    # 2. 日本株 (JPX日経400限定 - 厳選400銘柄)
+    # 2. 日本株 (JPX日経400限定)
     jp_tickers = []
     try:
         print("🔍 JPX日経400銘柄リストを取得中...")
@@ -49,38 +55,39 @@ def get_all_target_tickers():
         headers = {'User-Agent': 'Mozilla/5.0'}
         res = requests.get(url_jpx400, headers=headers)
         
-        # エンコーディングの自動判別と読み込み
-        content = res.content
         try:
-            df_jpx400 = pd.read_csv(io.BytesIO(content), encoding='cp932')
+            df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='cp932')
         except:
-            df_jpx400 = pd.read_csv(io.BytesIO(content), encoding='utf-8-sig')
+            df_jpx400 = pd.read_csv(io.BytesIO(res.content), encoding='utf-8-sig')
             
-        # カラム名が「コード」となっている部分を抽出
-        # CSVの構造によってはカラム名が異なる場合があるため、柔軟に処理
-        code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col]
-        if code_col:
-            codes = df_jpx400[code_col[0]].dropna().astype(str).tolist()
-            for code in codes:
-                if len(code) >= 4:
-                    # 4桁の数字が含まれているか確認
-                    clean_code = "".join(filter(str.isdigit, code))[:4]
-                    if len(clean_code) == 4:
-                        jp_tickers.append(f"{clean_code}.T")
+        # コードと銘柄名を取得
+        code_col = [col for col in df_jpx400.columns if 'コード' in col or 'Code' in col][0]
+        name_col = [col for col in df_jpx400.columns if '銘柄名' in col or 'Name' in col][0]
+        
+        for _, row in df_jpx400.iterrows():
+            code = str(row[code_col])
+            name = str(row[name_col])
+            clean_code = "".join(filter(str.isdigit, code))[:4]
+            if len(clean_code) == 4:
+                ticker = f"{clean_code}.T"
+                jp_tickers.append(ticker)
+                NAME_CACHE[ticker] = name
                         
         print(f"✅ JPX日経400: {len(jp_tickers)} 銘柄を抽出完了。")
     except Exception as e:
-        print(f"⚠️ JPX400リスト取得失敗: {e}。主要400銘柄でフォールバックします。")
-        # 主要400銘柄が取れない場合の最小限のガード
-        jp_tickers = ["7203.T", "6758.T", "6861.T", "7974.T", "9984.T", "8306.T", "4063.T", "8035.T"]
+        print(f"⚠️ JPX400リスト取得失敗: {e}")
+        jp_tickers = ["7203.T", "6758.T", "6861.T"]
 
     return us_tickers, jp_tickers
 
 def stage1_screening(ticker):
-    """Stage 1: 高速テクニカルスクリーニング (超高品質銘柄用)"""
+    """Stage 1: 高速テクニカルスクリーニング"""
     try:
-        data, _, name = get_stock_data(ticker, period="1y")
-        if len(data) < 100: return None # 十分なデータがあるもののみ
+        data, _, api_name = get_stock_data(ticker, period="1y")
+        if len(data) < 100: return None
+        
+        # 名前を優先順位で決定 (キャッシュ > API)
+        name = NAME_CACHE.get(ticker, api_name)
         
         data = prepare_features(data)
         latest = data.iloc[-1]
