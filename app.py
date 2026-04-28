@@ -273,6 +273,40 @@ with tab1:
 with tab2:
     st.subheader("🚀 Global Market Mass Screener")
     
+    # 手動スキャン実行ボタン
+    col_ctrl1, col_ctrl2 = st.columns([1, 4])
+    if col_ctrl1.button("🚀 大規模スキャナーを今すぐ起動", type="primary", help="日米の主要2,000銘柄以上を巡回して分析します（3〜5分かかります）"):
+        import subprocess
+        import sys
+        
+        with st.status("Global Mass Scanning... This may take a few minutes.", expanded=True) as status:
+            # 外部プロセスとして実行（Streamlitのブロッキングを避けるため）
+            # venvのpythonパスを取得
+            python_exe = sys.executable
+            scanner_script = os.path.join(BASE_DIR, "global_market_scanner.py")
+            
+            process = subprocess.Popen(
+                [python_exe, scanner_script],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1
+            )
+            
+            # リアルタイムで出力を取得して表示
+            for line in process.stdout:
+                if "✅" in line or "🚀" in line or "🧠" in line or "Progress" in line:
+                    status.write(line.strip())
+            
+            process.wait()
+            if process.returncode == 0:
+                status.update(label="Scanning Complete!", state="complete", expanded=False)
+                st.success("スキャンが完了しました！最新の結果を表示します。")
+                time.sleep(1)
+                st.rerun()
+            else:
+                st.error("スキャン中にエラーが発生しました。")
+    
     # 自動スキャン結果の表示セクション
     if os.path.exists(RESULTS_FILE):
         with st.expander("📅 最新の自動スキャン結果を表示 (AI推薦銘柄ランキング)", expanded=True):
